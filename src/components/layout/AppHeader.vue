@@ -116,8 +116,8 @@ watch(
                 </p>
                 <br/>
                 
-              </div>
-            </div>
+          </div>
+        </div>
 
             <div class="flex w-full justify-center lg:w-auto lg:justify-end">
               <div class="grid w-full max-w-[240px] grid-cols-3 gap-3">
@@ -130,10 +130,10 @@ watch(
                 >
                   <component :is="Icon" :size="20" weight="regular" />
                 </button>
-              </div>
-            </div>
-            
-          </div>
+        </div>
+      </div>
+
+      </div>
 
           <!-- <div class="flex flex-wrap gap-3 text-sm font-medium text-steel-600">
             <span class="rounded-full border border-white/60 bg-white/80 px-3 py-2 shadow-[0_12px_24px_rgba(12,42,70,0.12)]">
@@ -156,12 +156,12 @@ watch(
             <div class="grid grid-cols-3 gap-3">
               <div v-for="slot in 6" :key="`loading-shortcut-${slot}`" class="skeleton-block h-12 w-12 rounded-full" />
             </div>
-          </div>
+      </div>
         </template>
 
         <template v-else-if="error">
           <p class="text-sm text-accent-sky">
-            {{ error }}
+        {{ error }}
           </p>
         </template>
       </div>
@@ -182,7 +182,7 @@ watch(
             loading="lazy"
             class="h-full w-full object-cover"
           />
-        </div>
+      </div>
         <div class="flex flex-1 flex-col gap-2">
           <div class="flex items-center gap-2">
             <span class="text-sm font-semibold text-steel-700">
@@ -193,11 +193,11 @@ watch(
               class="rounded-full border border-accent-sky/40 bg-accent-sky/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.32em] text-accent-sky"
             >
               Admin
-            </span>
+        </span>
           </div>
-          <span class="text-[11px] font-medium uppercase tracking-[0.28em] text-steel-300">
-            {{ user ? practiceSubtitle : 'Sensarion Praxis' }}
-          </span>
+          <span class="text-[8px] font-medium uppercase tracking-[0.28em] text-steel-300">
+            {{ user.email }}
+        </span>
         </div>
       </div>
 
@@ -209,7 +209,7 @@ watch(
       >
         <PhSignOut :size="16" weight="regular" />
         <span>Logout</span>
-      </button>
+    </button>
     </section>
   </div>
 </template>
