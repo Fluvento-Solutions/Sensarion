@@ -16,6 +16,7 @@ type OllamaGenerateResponse = {
 export const generateWithOllama = async (
   payload: OllamaGenerateRequest
 ): Promise<OllamaGenerateResponse> => {
+  try {
   const response = await fetch(`${env.OLLAMA_BASE_URL}/api/generate`, {
     method: 'POST',
     headers: {
@@ -32,6 +33,16 @@ export const generateWithOllama = async (
     throw new Error(`Ollama error: ${response.status} ${response.statusText} - ${text}`);
   }
 
-  return response.json();
+    const data = (await response.json()) as OllamaGenerateResponse;
+    return data;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(
+        `Ollama nicht erreichbar (${env.OLLAMA_BASE_URL}). Prüfe den lokalen Ollama-Dienst: ${error.message}`
+      );
+    }
+
+    throw new Error('Unbekannter Fehler beim Zugriff auf Ollama.');
+  }
 };
 

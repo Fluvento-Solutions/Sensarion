@@ -6,6 +6,8 @@ Photorealistic, sterile UI prototype for the Sensarion Praxis-Cockpit built with
 
 - Node.js ≥ 18.17 (empfohlen: aktuelle LTS)
 - npm ≥ 9 (alternativ pnpm/yarn – Anleitung nutzt npm)
+- Lokale PostgreSQL-Instanz (z. B. Postgres.app) mit Datenbank `sensarion`
+- Lokale Ollama-Installation (Standard-Port `11434`)
 
 ## Projekt einrichten
 
@@ -14,21 +16,36 @@ npm install
 npm --prefix server install
 ```
 
+### Umgebungsvariablen vorbereiten
+
+```
+cp server/env.template server/.env
+```
+
+Passe anschließend die Werte in `server/.env` an (PostgreSQL-Zugang, Ollama-Endpunkt, Dev-Login-Passwort). Das Feld `SESSION_SECRET` wird zur Signierung der JWT-Token benutzt und sollte lokal ein ausreichend langes (≥16 Zeichen) Geheimnis enthalten.
+
+### Datenbank vorbereiten
+
+```bash
+npm --prefix server run prisma:generate
+npm --prefix server run prisma:migrate
+npm --prefix server run db:seed
+```
+
 ## Entwicklung starten
 
 ```bash
-npm run dev
+npm run dev            # Startet Frontend (5180) und Backend (4000) parallel
 ```
 
-Der Vite-Devserver startet unter [http://localhost:5180](http://localhost:5180). Hot Module Replacement (HMR) ist aktiv.
-
-### API-Server
+Einzelne Dienste:
 
 ```bash
-npm run dev:server
+npm run dev:frontend   # Nur Vite-Frontend
+npm run dev:server     # Nur Express-Backend
 ```
 
-Die Node/Express-API lauscht standardmäßig auf `http://localhost:4000`. Vite-Projekt und API können parallel gestartet werden.
+Der Vite-Devserver ist via Proxy mit dem Backend verbunden (`/api/*`). Das Backend beendet sich sauber bei Ctrl+C; bei Port-Konflikten erscheint nun ein aussagekräftiger Hinweis.
 
 ## Produktionsbuild erstellen
 
@@ -37,7 +54,7 @@ npm run build
 npm --prefix server run build
 ```
 
-Der fertige Build liegt anschließend in `dist/` und kann mit `npm run preview` lokal getestet werden.
+Der fertige Build liegt anschließend in `dist/` und kann mit `npm run preview` lokal getestet werden. Für das Backend steht `npm --prefix server run start` bereit.
 
 ## Codequalität
 
@@ -49,9 +66,10 @@ npm --prefix server run lint
 ## Datenbank & Prisma
 
 - Prisma-Schema liegt unter `server/prisma/schema.prisma`.
-- Client generieren: `npm run prisma:generate` (Backend muss installiert sein).
-- Migration erstellen: `npm run prisma:migrate`.
-- Seeds liegen in `server/prisma/seed.ts` (wird mit `npm run db:seed` ausgeführt, benötigt passende `DATABASE_URL`).
+- Client generieren: `npm --prefix server run prisma:generate`.
+- Migration erstellen: `npm --prefix server run prisma:migrate`.
+- Seeds liegen in `server/prisma/seed.ts` und werden mit `npm --prefix server run db:seed` ausgeführt.
+- Aus dem Projektwurzelverzeichnis stehen Kurzbefehle bereit: `npm run db:migrate`, `npm run db:generate`, `npm run db:seed`.
 
 ## Entwicklung-Login
 
@@ -60,7 +78,9 @@ Für lokale Tests steht ein Dev-Login bereit:
 - Benutzer: `max.mustermann@sensarion.local`
 - Passwort: `Pa$$w0rd` (konfigurierbar über `DEV_LOGIN_PASSWORD` in `server/.env`)
 
-Die Frontend-App führt beim Laden automatisch einen Dev-Login aus und zeigt das Profil in der Kopfzeile.
+Nach dem Start öffnet sich eine Login-Karte in der PWA. Gib dort E-Mail & Passwort ein; optional kann die E-Mail-Adresse gemerkt werden. Für lokale Tests kannst du den Schalter „Dev-Login verwenden“ aktivieren – dann wird das oben konfigurierte Default-Passwort akzeptiert. Nach erfolgreichem Login erscheint das Profil in der Kopfzeile. Über den eingebauten Logout-Button wird die Session beendet und der Login-Screen erneut angezeigt.
+
+Falls die Datenbank nicht erreichbar ist, informiert das Backend mit einem `503 DATABASE_UNAVAILABLE`.
 
 ## Projektstruktur
 

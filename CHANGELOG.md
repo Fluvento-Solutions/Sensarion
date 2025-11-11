@@ -19,6 +19,9 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0
 - Prisma-Schema für Praxen, Teams, Nutzende und Rollen hinzugefügt; Prisma Client verfügbar gemacht.
 - Seed-Skript legt Musterpraxis und Nutzer*in Max Mustermann an.
 - Auth-API (Dev-Login, Profilabruf) und Frontend-Anbindung inklusive Nutzeranzeige in der Kopfzeile implementiert.
+- Kombiniertes `npm run dev`-Skript, das Frontend und Backend parallel startet; zusätzliche Root-Skripte für Prisma (`db:migrate`, `db:generate`, `db:seed`).
+- Login-Formular mit optionaler E-Mail-Merkliste und Dev-Login-Schalter; Auth-Store auf LocalStorage-Basis für persistente Sessions.
+- JWT-basierte Authentifizierung im Backend (`/api/auth/login`, `/api/auth/logout`) inklusive `SESSION_SECRET`-Konfiguration.
 
 ### Fixed
 
@@ -32,4 +35,9 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0
 - Added a framed shell background to unify spacing between panels and eliminate visual gaps.
 - Refined shell gradients and card surfaces to avoid multi-layer transparency artifacts.
 - Replaced unsupported Tailwind gradient shorthand with an arbitrary color stop for the card surface.
+- Hardened backend environment validation, CORS handling, and authentication responses for predictable dev-login behaviour.
+- Normalised Vue shell layout to 100 dvh, improved skeleton grids, and added a frontend fallback message when the profile cannot be loaded.
+- Updated documentation with backend setup steps (env, migrations, seeds) for a reproducible local stack.
+- Express-Server meldet belegte Ports und fährt bei SIGINT/SIGTERM sauber herunter; Auth- und Ollama-Routen liefern klarere Fehlermeldungen bei Datenbank- bzw. LLM-Ausfällen.
+- Profil-Widget in der Kopfzeile visuell überarbeitet und um Logout-Button erweitert; Fehlerausgabe beim Login verbessert.
 

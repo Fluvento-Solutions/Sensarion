@@ -14,7 +14,7 @@
     </div>
 
     <div class="flex flex-col gap-3">
-      <p class="text-xs uppercase tracking-[0.28em] text-steel-200">Sterile Aufgabenliste</p>
+      <p class="text-xs uppercase tracking-[0.28em] text-steel-200"> Aufgabenliste</p>
       <div class="flex flex-col gap-3">
         <div class="skeleton-block h-12 w-full" />
         <div class="skeleton-block h-12 w-full" />

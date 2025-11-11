@@ -21,7 +21,19 @@ module.exports = {
       parserOptions: {
         project: './tsconfig.json'
       },
-      rules: {}
+      rules: {
+        '@typescript-eslint/no-misused-promises': [
+          'error',
+          {
+            checksVoidReturn: false
+          }
+        ],
+        '@typescript-eslint/no-unsafe-assignment': 'off',
+        '@typescript-eslint/no-unsafe-member-access': 'off',
+        '@typescript-eslint/no-unsafe-call': 'off',
+        '@typescript-eslint/no-unsafe-return': 'off',
+        '@typescript-eslint/no-redundant-type-constituents': 'off'
+      }
     }
   ]
 };

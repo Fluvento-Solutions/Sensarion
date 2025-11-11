@@ -10,7 +10,7 @@
     <div class="relative w-full">
       <input
         type="text"
-        placeholder="Sterile KI-Anfrage formulieren…"
+        placeholder="was kann ich für dich tun?"
         class="w-full rounded-2xl border border-white/60 bg-white/80 px-5 py-4 text-lg font-medium text-steel-700 shadow-[0_18px_40px_rgba(12,31,47,0.15)] outline-none transition focus:border-accent-sky/80 focus:shadow-[0_22px_46px_rgba(26,127,216,0.22)] focus:ring-4 focus:ring-accent-sky/20"
       />
       <button

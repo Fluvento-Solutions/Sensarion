@@ -2,28 +2,24 @@ import { Pool, PoolClient } from 'pg';
 
 import { env } from '../config/env';
 
-let pool: Pool | null = null;
+type ManagedPool = Pool<PoolClient>;
 
-const createPool = () => {
-  if (!env.PG_HOST && !env.DATABASE_URL) {
-    console.warn('⚠️  PostgreSQL env vars missing; DB routes will remain disabled until configured.');
+let pool: ManagedPool | null = null;
+
+const createPool = (): ManagedPool | null => {
+  if (!env.DATABASE_URL) {
+    console.warn('⚠️  DATABASE_URL missing; PostgreSQL routes are disabled.');
     return null;
   }
 
-  return new Pool({
+  return new Pool<PoolClient>({
     connectionString: env.DATABASE_URL,
-    host: env.PG_HOST,
-    port: env.PG_PORT,
-    database: env.PG_DATABASE,
-    user: env.PG_USER,
-    password: env.PG_PASSWORD,
-    ssl: env.PG_SSL ? { rejectUnauthorized: false } : undefined,
     max: 5,
     idleTimeoutMillis: 30_000
   });
 };
 
-export const getPool = () => {
+export const getPool = (): ManagedPool | null => {
   if (!pool) {
     pool = createPool();
   }
@@ -31,11 +27,11 @@ export const getPool = () => {
   return pool;
 };
 
-export const withClient = async <T>(fn: (client: PoolClient) => Promise<T>) => {
+export const withClient = async <T>(fn: (client: PoolClient) => Promise<T>): Promise<T> => {
   const currentPool = getPool();
 
   if (!currentPool) {
-    throw new Error('Database pool unavailable. Check environment variables.');
+    throw new Error('Database pool unavailable. Check DATABASE_URL.');
   }
 
   const client = await currentPool.connect();

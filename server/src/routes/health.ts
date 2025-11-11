@@ -9,7 +9,7 @@ router.get('/', (_req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     env: {
-      postgresConfigured: Boolean(env.PG_HOST && env.PG_DATABASE && env.PG_USER),
+      databaseConfigured: Boolean(env.DATABASE_URL),
       ollamaBaseUrl: env.OLLAMA_BASE_URL
     }
   });
