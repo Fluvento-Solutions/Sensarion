@@ -1,0 +1,97 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply relative h-screen w-screen overflow-hidden text-steel-700 font-sans antialiased;
+  background:
+    linear-gradient(160deg, #f0f6fb 0%, #e4eef8 40%, #d9e5f1 100%),
+    radial-gradient(120% 160% at 50% 0%, rgba(255, 255, 255, 0.85), rgba(232, 241, 248, 0.95));
+}
+
+#app {
+  @apply flex h-full w-full;
+}
+
+.shell-surface {
+  @apply relative z-[1] flex h-full w-full flex-col gap-6 px-4 py-6 lg:px-8 lg:py-8;
+}
+
+.shell-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 48px;
+  background: linear-gradient(135deg, #f9fbff 0%, #eef3f9 45%, #e3edf6 100%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 -1px 0 rgba(185, 199, 213, 0.45),
+    0 35px 80px rgba(15, 46, 70, 0.18);
+  z-index: 0;
+}
+
+.shell-surface::after {
+  content: '';
+  position: absolute;
+  inset: 18px;
+  border-radius: 38px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(240, 246, 252, 0.92) 45%, rgba(232, 241, 248, 0.88) 100%),
+    radial-gradient(120% 160% at 50% 10%, rgba(255, 255, 255, 0.75), transparent 68%),
+    radial-gradient(130% 130% at 16% 70%, rgba(232, 241, 248, 0.6), transparent 78%),
+    radial-gradient(130% 130% at 84% 72%, rgba(232, 241, 248, 0.58), transparent 78%);
+  opacity: 0.6;
+  filter: blur(2px);
+  z-index: 0;
+}
+
+.shell-surface > * {
+  position: relative;
+  z-index: 1;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(90% 130% at 50% 5%, rgba(255, 255, 255, 0.8), transparent 65%),
+    radial-gradient(110% 160% at 15% 85%, rgba(24, 180, 166, 0.18), transparent 75%),
+    radial-gradient(110% 160% at 85% 80%, rgba(26, 127, 216, 0.18), transparent 75%);
+  mix-blend-mode: lighten;
+  z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    115deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.08) 1.8%,
+    rgba(255, 255, 255, 0.02) 2.3%,
+    rgba(255, 255, 255, 0.02) 5.6%
+  );
+  opacity: 0.3;
+  mix-blend-mode: overlay;
+  z-index: 0;
+}
+
+.glass-card {
+  @apply overflow-hidden rounded-3xl border border-white/55 bg-gradient-to-br from-white via-[#f3f6fb] to-surface-glass backdrop-blur-2xl shadow-[0_24px_60px_rgba(15,46,70,0.14)];
+}
+
+.skeleton-block {
+  @apply animate-pulse bg-white/40 border border-white/20 rounded-2xl;
+}
+
