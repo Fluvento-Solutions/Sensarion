@@ -15,6 +15,7 @@ model Practice {
   updatedAt    DateTime     @updatedAt
   teams        PracticeTeam[]
   users        User[]
+  patients     Patient[]
 }
 
 model PracticeTeam {
@@ -80,5 +81,57 @@ enum TeamRole {
   MFA
   ADMINISTRATION
   CUSTOM
+}
+
+model Patient {
+  id            String        @id @default(cuid())
+  practiceId    String
+  version      Int           @default(1)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  name         Json          // { given: string[], family: string }
+  birthDate    DateTime      @db.Date
+  gender       String?       // m/w/d
+  tags         String[]
+  address      Json?         // { street: string, zip: string, city: string, country: string }
+  contact      Json?         // { phone: string, email: string, mobile: string }
+  insurance    Json?         // { number: string, type: string, provider: string }
+  vitalsLatest Json?         // { bp_systolic: number, bp_diastolic: number, hr: number, temperature: number, spo2: number, glucose: number, bmi: number, updated_at: string }
+  vitalsHistory Json         @default("[]") // Array von Vitalwerte-Objekten mit Timestamp
+  allergies    Json          @default("[]") // [{ substance: string, severity: string, deleted_at?: string, is_deleted?: boolean }]
+  medications  Json          @default("[]") // [{ name: string, dose: string, deleted_at?: string, is_deleted?: boolean }]
+  auditLogs    Json          @default("[]") // Array von Audit-Log-Objekten
+  
+  practice  Practice        @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  notes     PatientNote[]
+  encounters Encounter[]
+
+  @@index([practiceId])
+  @@index([practiceId, updatedAt(sort: Desc)])
+}
+
+model PatientNote {
+  id        String   @id @default(cuid())
+  patientId String
+  authorId  String
+  createdAt DateTime @default(now())
+  text      String   @db.Text
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, createdAt(sort: Desc)])
+}
+
+model Encounter {
+  id        String   @id @default(cuid())
+  patientId String
+  date      DateTime @db.Date
+  location  String?
+  reason    String?
+  summary   String?  @db.Text
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, date(sort: Desc)])
 }
 

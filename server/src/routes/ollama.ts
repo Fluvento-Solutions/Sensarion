@@ -8,6 +8,7 @@ const router = Router();
 const requestSchema = z.object({
   prompt: z.string().min(1, 'Prompt required'),
   model: z.string().default('llama3'),
+  context: z.string().optional(),
   options: z.record(z.unknown()).optional()
 });
 

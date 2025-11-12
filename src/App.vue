@@ -8,10 +8,14 @@ import AppSidebar from '@/components/layout/AppSidebar.vue';
 import ContextPanel from '@/components/layout/ContextPanel.vue';
 import FooterConsole from '@/components/layout/FooterConsole.vue';
 import OverviewPanel from '@/components/dashboard/OverviewPanel.vue';
+import KiTestModule from '@/components/dashboard/KiTestModule.vue';
+import PatientsModule from '@/components/dashboard/PatientsModule.vue';
 import { devLogin, fetchProfile, login, logout } from '@/services/api';
 import { useAuthStore } from '@/composables/useAuthStore';
+import { useViewState } from '@/composables/useViewState';
 
 const auth = useAuthStore();
+const { activeView } = useViewState();
 
 const loadingProfile = ref(false);
 const profileError = ref<string | null>(null);
@@ -123,6 +127,8 @@ onMounted(async () => {
           </p>
         </div>
       </div>
+      <KiTestModule v-else-if="activeView === 'ki-test'" />
+      <PatientsModule v-else-if="activeView === 'patients'" />
       <OverviewPanel v-else />
     </template>
 

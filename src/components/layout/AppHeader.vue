@@ -10,18 +10,25 @@ import {
   PhSignOut,
   PhList,
   PhSquaresFour,
-  PhSidebar
+  PhSidebar,
+  PhSparkle,
+  PhStethoscope
 } from '@phosphor-icons/vue';
 
 import placeholderLogo from '@/assets/media/image/example_logo.png';
 import userAvatar from '@/assets/media/image/maxmuster.png';
 import { usePanelLayout } from '@/composables/usePanelLayout';
 import type { PanelId } from '@/composables/usePanelLayout';
+import { useViewState } from '@/composables/useViewState';
 
 import type { UserProfile } from '@/services/api';
 
+const { activeView, setActiveView } = useViewState();
+
 const shortcutIcons = [
-  PhHouse,
+  PhSquaresFour,  // Shortcut 1: Overview
+  PhSparkle,      // Shortcut 2: KI-Test
+  PhStethoscope,  // Shortcut 3: Patientenakte
   PhCalendar,
   PhChartBar,
   PhUser,
@@ -42,8 +49,19 @@ const panelLabels: Record<PanelId, string> = {
 };
 
 const handleShortcutClick = (index: number) => {
-  console.log(`Shortcut ${index + 1} clicked`);
-  // TODO: Implement navigation or action
+  if (index === 0) {
+    // Shortcut 1: Overview
+    setActiveView('overview');
+  } else if (index === 1) {
+    // Shortcut 2: KI-Test
+    setActiveView('ki-test');
+  } else if (index === 2) {
+    // Shortcut 3: Patientenakte
+    setActiveView('patients');
+  } else {
+    console.log(`Shortcut ${index + 1} clicked`);
+    // TODO: Implement other shortcuts
+  }
 };
 
 const props = defineProps<{
@@ -150,12 +168,17 @@ watch(
       </div>
 
             <div class="flex w-full justify-center lg:w-auto lg:justify-end">
-              <div class="grid w-full max-w-[240px] grid-cols-3 gap-3">
+              <div class="grid w-full max-w-[240px] grid-cols-4 gap-3">
                 <button
                   v-for="(Icon, index) in shortcutIcons"
                   :key="`practice-shortcut-${index}`"
                   type="button"
-                  class="flex h-12 w-12 items-center justify-center rounded-full border border-white/65 bg-white/40 text-steel-600 transition-all hover:border-accent-sky/60 hover:bg-white/70 hover:scale-110 hover:shadow-[0_8px_24px_rgba(13,86,132,0.2)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent-sky/25 active:scale-95"
+                  :class="[
+                    'flex h-12 w-12 items-center justify-center rounded-full border text-steel-600 transition-all hover:scale-110 hover:shadow-[0_8px_24px_rgba(13,86,132,0.2)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent-sky/25 active:scale-95',
+                    (index === 0 && activeView === 'overview') || (index === 1 && activeView === 'ki-test') || (index === 2 && activeView === 'patients')
+                      ? 'border-accent-sky/80 bg-white/80 shadow-[0_8px_24px_rgba(13,86,132,0.2)]'
+                      : 'border-white/65 bg-white/40 hover:border-accent-sky/60 hover:bg-white/70'
+                  ]"
                   @click="handleShortcutClick(index)"
                 >
                   <component :is="Icon" :size="20" weight="regular" />

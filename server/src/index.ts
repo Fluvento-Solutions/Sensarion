@@ -7,6 +7,7 @@ import dbRouter from './routes/db';
 import healthRouter from './routes/health';
 import ollamaRouter from './routes/ollama';
 import authRouter from './routes/auth';
+import patientsRouter from './routes/patients';
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use('/api/health', healthRouter);
 app.use('/api/db', dbRouter);
 app.use('/api/ollama', ollamaRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/patients', patientsRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ status: 'error', message: 'Not Found' });
