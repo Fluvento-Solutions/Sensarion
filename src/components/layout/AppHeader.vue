@@ -7,11 +7,16 @@ import {
   PhUser,
   PhGear,
   PhBell,
-  PhSignOut
+  PhSignOut,
+  PhList,
+  PhSquaresFour,
+  PhSidebar
 } from '@phosphor-icons/vue';
 
 import placeholderLogo from '@/assets/media/image/example_logo.png';
 import userAvatar from '@/assets/media/image/maxmuster.png';
+import { usePanelLayout } from '@/composables/usePanelLayout';
+import type { PanelId } from '@/composables/usePanelLayout';
 
 import type { UserProfile } from '@/services/api';
 
@@ -23,6 +28,18 @@ const shortcutIcons = [
   PhGear,
   PhBell
 ];
+
+const panelIcons: Record<PanelId, typeof PhList> = {
+  nav: PhList,
+  main: PhSquaresFour,
+  context: PhSidebar
+};
+
+const panelLabels: Record<PanelId, string> = {
+  nav: 'Navigation',
+  main: 'Hauptansicht',
+  context: 'Kontext'
+};
 
 const handleShortcutClick = (index: number) => {
   console.log(`Shortcut ${index + 1} clicked`);
@@ -39,15 +56,11 @@ const emit = defineEmits<{
   (event: 'logout'): void;
 }>();
 
-const initials = computed(() => {
-  if (!props.user) return '??';
-  const parts = props.user.displayName.split(' ');
-  return parts
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? '')
-    .join('');
-});
+const { minimizedPanels, getPanel, restorePanel } = usePanelLayout();
+
+const handleRestorePanel = (panelId: PanelId) => {
+  restorePanel(panelId);
+};
 
 const practiceSubtitle = computed(() => {
   if (!props.user) return 'Praxis wird geladen...';
@@ -86,38 +99,55 @@ watch(
       <div class="relative flex h-full flex-col gap-6">
         <template v-if="user">
           <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div class="flex items-center gap-4">
-              <div
-                class="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-[0_18px_40px_rgba(13,86,132,0.25)]"
-                aria-hidden="true"
-              >
-                <img
-                  v-if="!logoLoadError"
-                  :src="displayLogoUrl"
-                  :alt="practiceLogoUrl ? `${user.practice.name} Logo` : `${user.practice.name} Logo (Platzhalter)`"
-                  loading="lazy"
-                  class="h-full w-full object-contain p-2"
-                  @error="handleLogoError"
-                />
-                <span
-                  v-else
-                  class="text-lg font-semibold uppercase text-steel-400"
+            <div class="flex flex-1 flex-col gap-4">
+              <div class="flex items-center gap-4">
+                <div
+                  class="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-[0_18px_40px_rgba(13,86,132,0.25)]"
+                  aria-hidden="true"
                 >
-                  ??
-                </span>
-              </div>
-              <div>
-                <p class="text-[11px] uppercase tracking-[0.38em] text-steel-200">Sensarion Praxis</p>
-                <h1 class="text-2xl font-semibold text-steel-700">
-                  {{ user.practice.name }}
-                </h1>
-                <p class="text-xs font-medium uppercase tracking-[0.26em] text-steel-300">
-                  {{ practiceSubtitle }}
-                </p>
-                <br/>
-                
+                  <img
+                    v-if="!logoLoadError"
+                    :src="displayLogoUrl"
+                    :alt="practiceLogoUrl ? `${user.practice.name} Logo` : `${user.practice.name} Logo (Platzhalter)`"
+                    loading="lazy"
+                    class="h-full w-full object-contain p-2"
+                    @error="handleLogoError"
+                  />
+                  <span
+                    v-else
+                    class="text-lg font-semibold uppercase text-steel-400"
+                  >
+                    ??
+                  </span>
+                </div>
+                <div>
+                  <p class="text-[11px] uppercase tracking-[0.38em] text-steel-200">Sensarion Praxis</p>
+                  <h1 class="text-2xl font-semibold text-steel-700">
+                    {{ user.practice.name }}
+                  </h1>
+                  <p class="text-xs font-medium uppercase tracking-[0.26em] text-steel-300">
+                    {{ practiceSubtitle }}
+                  </p>
           </div>
         </div>
+
+              <!-- Minimierte Panel-Tabs im rot markierten Bereich -->
+              <div
+                v-if="minimizedPanels.length > 0"
+                class="flex flex-wrap gap-2 transition-all duration-200 ease-out"
+              >
+                <button
+                  v-for="panelId in minimizedPanels"
+                  :key="panelId"
+                  type="button"
+                  class="group flex items-center gap-2 rounded-xl border border-white/60 bg-white/40 px-3 py-2 text-xs font-medium text-steel-600 transition-all hover:border-accent-sky/60 hover:bg-white/70 hover:scale-105 hover:shadow-[0_8px_24px_rgba(13,86,132,0.2)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent-sky/25 active:scale-95"
+                  @click="handleRestorePanel(panelId)"
+                >
+                  <component :is="panelIcons[panelId]" :size="14" weight="regular" />
+                  <span>{{ panelLabels[panelId] }}</span>
+                </button>
+        </div>
+      </div>
 
             <div class="flex w-full justify-center lg:w-auto lg:justify-end">
               <div class="grid w-full max-w-[240px] grid-cols-3 gap-3">
@@ -130,17 +160,9 @@ watch(
                 >
                   <component :is="Icon" :size="20" weight="regular" />
                 </button>
-        </div>
+              </div>
+            </div>
       </div>
-
-      </div>
-
-          <!-- <div class="flex flex-wrap gap-3 text-sm font-medium text-steel-600">
-            <span class="rounded-full border border-white/60 bg-white/80 px-3 py-2 shadow-[0_12px_24px_rgba(12,42,70,0.12)]">
-              Praxis-Code: {{ user.practice.code }}
-            </span>
-            
-          </div> -->
         </template>
 
         <template v-else-if="loading">
@@ -196,7 +218,7 @@ watch(
         </span>
           </div>
           <span class="text-[8px] font-medium uppercase tracking-[0.28em] text-steel-300">
-            {{ user.email }}
+            {{ user?.email ?? '' }}
         </span>
         </div>
       </div>

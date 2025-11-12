@@ -4,7 +4,7 @@
       <p class="text-xs uppercase tracking-[0.32em] text-steel-200">
         KI-Verbindung
       </p>
-      <div class="skeleton-block h-8 w-24" />
+      <!-- <div class="skeleton-block h-8 w-24" /> -->
     </div>
 
     <div class="relative w-full">
@@ -21,11 +21,11 @@
       </button>
     </div>
 
-    <div class="flex flex-wrap gap-2">
+    <!-- <div class="flex flex-wrap gap-2">
       <div class="skeleton-block h-6 w-24 rounded-xl" />
       <div class="skeleton-block h-6 w-20 rounded-xl" />
       <div class="skeleton-block h-6 w-28 rounded-xl" />
-    </div>
+    </div> -->
   </div>
 </template>
 
