@@ -119,6 +119,11 @@ model Patient {
   diagnoses    Json          @default("[]") // [{ id: string, text: string, created_at: string, deleted_at?: string, is_deleted?: boolean }]
   findings     Json          @default("[]") // [{ id: string, text: string, created_at: string, deleted_at?: string, is_deleted?: boolean }]
   auditLogs    Json          @default("[]") // Array von Audit-Log-Objekten
+  deceased     Boolean       @default(false)
+  deceasedDate DateTime?     @db.Date
+  isDeleted    Boolean       @default(false)
+  deletedAt    DateTime?
+  deleteReason String?
   
   practice  Practice        @relation(fields: [practiceId], references: [id], onDelete: Cascade)
   notes     PatientNote[]

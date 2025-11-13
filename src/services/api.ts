@@ -1070,6 +1070,34 @@ export const deletePatientFinding = async (id: string, findingId: string, reason
   }
 };
 
+// PATCH /api/patients/:id/mark-deceased - Patient als verstorben markieren
+export const markPatientDeceased = async (id: string, deceasedDate?: string): Promise<void> => {
+  const response = await fetch(`/api/patients/${id}/mark-deceased`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ deceasedDate })
+  });
+
+  const result = await handleJson<{ status: 'ok'; message: string } | ErrorResponse>(response);
+  if (result.status === 'error') {
+    throw new Error(result.message);
+  }
+};
+
+// DELETE /api/patients/:id - Patient löschen (mit Passwort-Bestätigung)
+export const deletePatient = async (id: string, reason: string, adminPassword: string): Promise<void> => {
+  const response = await fetch(`/api/patients/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ reason, adminPassword })
+  });
+
+  const result = await handleJson<{ status: 'ok'; message: string } | ErrorResponse>(response);
+  if (result.status === 'error') {
+    throw new Error(result.message);
+  }
+};
+
 // Setup API Functions
 export type SetupStatus = {
   status: 'ok';

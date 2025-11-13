@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 
 import { env } from '../config/env';
 import { prisma } from '../db/client';
@@ -260,10 +261,11 @@ router.get('/', requireAuth, async (req, res) => {
     const q = (req.query.q as string) || '';
     const searchTerm = q.toLowerCase().trim();
 
-    // Hole alle Patienten der Praxis
+    // Hole alle Patienten der Praxis (nicht gelöschte)
     const allPatients = await prisma.patient.findMany({
       where: {
-        practiceId: user.practiceId
+        practiceId: user.practiceId,
+        isDeleted: false
       },
       orderBy: { updatedAt: 'desc' },
       take: 100
@@ -306,7 +308,9 @@ router.get('/', requireAuth, async (req, res) => {
           insurance: p.insurance,
           vitals_latest: p.vitalsLatest,
           allergies: activeAllergies,
-          medications: activeMedications
+          medications: activeMedications,
+          deceased: p.deceased,
+          deceased_date: p.deceasedDate ? p.deceasedDate.toISOString().split('T')[0] : null
         };
       })
     });
@@ -400,7 +404,7 @@ router.get('/:id', requireAuth, async (req, res) => {
       }
     });
 
-    if (!patient) {
+    if (!patient || patient.isDeleted) {
       return res.status(404).json({
         status: 'error',
         message: 'Patient nicht gefunden'
@@ -424,7 +428,9 @@ router.get('/:id', requireAuth, async (req, res) => {
         allergies: patient.allergies,
         medications: patient.medications,
         diagnoses: patient.diagnoses,
-        findings: patient.findings
+        findings: patient.findings,
+        deceased: patient.deceased,
+        deceased_date: patient.deceasedDate ? patient.deceasedDate.toISOString().split('T')[0] : null
       }
     });
   } catch (error) {
@@ -2172,6 +2178,177 @@ router.delete('/:id/findings/:findingId', requireAuth, async (req, res) => {
     return res.status(500).json({
       status: 'error',
       message: 'Fehler beim Löschen des Befunds'
+    });
+  }
+});
+
+// PATCH /api/patients/:id/mark-deceased - Patient als verstorben markieren
+const markDeceasedSchema = z.object({
+  deceasedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+});
+
+router.patch('/:id/mark-deceased', requireAuth, async (req, res) => {
+  try {
+    const user = (req as AuthenticatedRequestWithUser).authUser;
+    if (!user?.practiceId) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Keine Praxis zugeordnet'
+      });
+    }
+
+    const parsed = markDeceasedSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        status: 'error',
+        errors: parsed.error.flatten().fieldErrors
+      });
+    }
+
+    const patient = await prisma.patient.findFirst({
+      where: {
+        id: req.params.id,
+        practiceId: user.practiceId
+      }
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Patient nicht gefunden'
+      });
+    }
+
+    const deceasedDate = parsed.data.deceasedDate 
+      ? new Date(parsed.data.deceasedDate)
+      : new Date();
+
+    await prisma.patient.update({
+      where: { id: req.params.id },
+      data: {
+        deceased: true,
+        deceasedDate: deceasedDate
+      }
+    });
+
+    // Audit-Log erstellen
+    await addAuditLogToPatient(
+      req.params.id,
+      createAuditLog(
+        'update',
+        'patient',
+        req.params.id,
+        `${(patient.name as any).family}`,
+        `Patient als verstorben markiert (${deceasedDate.toLocaleDateString('de-DE')})`,
+        user.shortName || user.displayName
+      )
+    );
+
+    return res.json({
+      status: 'ok',
+      message: 'Patient als verstorben markiert'
+    });
+  } catch (error) {
+    console.error('mark deceased failed', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Fehler beim Markieren als verstorben'
+    });
+  }
+});
+
+// DELETE /api/patients/:id - Patient löschen (mit Passwort-Bestätigung)
+const deletePatientSchema = z.object({
+  reason: z.string().min(1, 'Grund für die Löschung ist erforderlich'),
+  adminPassword: z.string().min(1, 'Admin-Passwort ist erforderlich')
+});
+
+router.delete('/:id', requireAuth, async (req, res) => {
+  try {
+    const user = (req as AuthenticatedRequestWithUser).authUser;
+    if (!user?.practiceId) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Keine Praxis zugeordnet'
+      });
+    }
+
+    const parsed = deletePatientSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        status: 'error',
+        errors: parsed.error.flatten().fieldErrors
+      });
+    }
+
+    // Passwort verifizieren
+    const settings = await prisma.practiceSettings.findUnique({
+      where: { practiceId: user.practiceId }
+    });
+
+    if (!settings?.adminPasswordHash) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Admin-Passwort nicht konfiguriert'
+      });
+    }
+
+    const passwordValid = await bcrypt.compare(parsed.data.adminPassword, settings.adminPasswordHash);
+    if (!passwordValid) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Ungültiges Admin-Passwort'
+      });
+    }
+
+    const patient = await prisma.patient.findFirst({
+      where: {
+        id: req.params.id,
+        practiceId: user.practiceId
+      }
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Patient nicht gefunden'
+      });
+    }
+
+    // Soft Delete
+    await prisma.patient.update({
+      where: { id: req.params.id },
+      data: {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deleteReason: parsed.data.reason
+      }
+    });
+
+    // Audit-Log erstellen
+    await addAuditLogToPatient(
+      req.params.id,
+      createAuditLog(
+        'delete',
+        'patient',
+        req.params.id,
+        `${(patient.name as any).family}`,
+        `Patient gelöscht`,
+        user.shortName || user.displayName,
+        undefined,
+        parsed.data.reason
+      )
+    );
+
+    return res.json({
+      status: 'ok',
+      message: 'Patient gelöscht'
+    });
+  } catch (error) {
+    console.error('delete patient failed', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Fehler beim Löschen des Patienten'
     });
   }
 });

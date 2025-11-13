@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch, onUnmounted } from 'vue';
-import { PhMagnifyingGlass, PhList, PhUser, PhPlus, PhActivity, PhShield, PhStethoscope, PhFileText, PhCalendar, PhLock, PhGenderMale, PhGenderFemale, PhGenderIntersex, PhCaretRight, PhPencil, PhTrash, PhX, PhTabs, PhAddressBook, PhChartLine, PhFunnel, PhFunnelSimple, PhArrowsDownUp, PhCheckCircle, PhXCircle, PhPencilSimple, PhTrashSimple, PhSparkle, PhShieldCheck, PhEye, PhCheck } from '@phosphor-icons/vue';
+import { PhMagnifyingGlass, PhList, PhUser, PhPlus, PhActivity, PhShield, PhStethoscope, PhFileText, PhCalendar, PhLock, PhGenderMale, PhGenderFemale, PhGenderIntersex, PhCaretRight, PhPencil, PhTrash, PhX, PhTabs, PhAddressBook, PhChartLine, PhFunnel, PhFunnelSimple, PhArrowsDownUp, PhCheckCircle, PhXCircle, PhPencilSimple, PhTrashSimple, PhSparkle, PhShieldCheck, PhEye, PhCheck, PhWarning } from '@phosphor-icons/vue';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -56,6 +56,9 @@ import {
   addPatientFinding,
   updatePatientFinding,
   deletePatientFinding,
+  markPatientDeceased,
+  deletePatient,
+  verifyAdminPassword,
   type Patient,
   type PatientNote,
   type PatientEncounter,
@@ -64,6 +67,7 @@ import {
   type PatientDiagnosis,
   type PatientFinding
 } from '@/services/api';
+import AdminPasswordDialog from '@/components/admin/AdminPasswordDialog.vue';
 import PatientWizard from '@/components/patient/PatientWizard.vue';
 
 const searchQuery = ref('');
@@ -98,6 +102,12 @@ const showDeleteAllergyModal = ref(false);
 const showDeleteMedicationModal = ref(false);
 const showDeleteDiagnosisModal = ref(false);
 const showDeleteFindingModal = ref(false);
+const showDeletePatientModal = ref(false);
+const showMarkDeceasedModal = ref(false);
+const showDeletePatientPasswordDialog = ref(false);
+const deletePatientReason = ref('');
+const deceasedDate = ref('');
+const adminPasswordForDelete = ref('');
 const deletingVitalId = ref<string | null>(null);
 const deletingAllergyId = ref<string | null>(null);
 const deletingMedicationId = ref<string | null>(null);
@@ -894,6 +904,62 @@ const handleWizardSuccess = async (patientId: string) => {
 
 const handleWizardClose = () => {
   showPatientWizard.value = false;
+};
+
+const handleMarkDeceased = async () => {
+  if (!selectedPatientId.value) return;
+  
+  isLoading.value = true;
+  error.value = null;
+  try {
+    await markPatientDeceased(selectedPatientId.value, deceasedDate.value || undefined);
+    showMarkDeceasedModal.value = false;
+    deceasedDate.value = '';
+    await loadPatients();
+    selectedPatientId.value = null;
+    selectedPatient.value = null;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Fehler beim Markieren als verstorben';
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const handleDeletePatientWithPasswordPrompt = async () => {
+  if (!selectedPatientId.value || !deletePatientReason.value.trim()) {
+    error.value = 'Bitte geben Sie einen Grund an';
+    return;
+  }
+  
+  // Passwort abfragen
+  const password = prompt('Bitte geben Sie das Admin-Passwort ein, um den Löschvorgang zu bestätigen:');
+  if (!password) {
+    return; // Abgebrochen
+  }
+  
+  await handleDeletePatientWithPassword(password);
+};
+
+const handleDeletePatientWithPassword = async (password: string) => {
+  if (!selectedPatientId.value || !deletePatientReason.value.trim()) {
+    error.value = 'Bitte geben Sie einen Grund an';
+    return;
+  }
+  
+  isLoading.value = true;
+  error.value = null;
+  try {
+    await deletePatient(selectedPatientId.value, deletePatientReason.value.trim(), password);
+    showDeletePatientModal.value = false;
+    deletePatientReason.value = '';
+    await loadPatients();
+    selectedPatientId.value = null;
+    selectedPatient.value = null;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Fehler beim Löschen des Patienten';
+  } finally {
+    isLoading.value = false;
+  }
 };
 
 const openEditPatientModal = () => {
@@ -1740,6 +1806,22 @@ onMounted(() => {
                   <PhPencil :size="16" weight="regular" />
                   Bearbeiten
                 </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-xl border border-orange-300 bg-orange-50 px-3 py-1.5 text-sm font-medium text-orange-700 transition hover:bg-orange-100"
+                  @click="showMarkDeceasedModal = true"
+                >
+                  <PhWarning :size="16" weight="regular" />
+                  Verstorben
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-xl border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-100"
+                  @click="showDeletePatientModal = true"
+                >
+                  <PhTrash :size="16" weight="regular" />
+                  Löschen
+                </button>
               </div>
         </div>
 
@@ -2382,6 +2464,98 @@ onMounted(() => {
       @close="handleWizardClose"
       @success="handleWizardSuccess"
     />
+
+    <!-- Mark Deceased Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showMarkDeceasedModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+        @click.self="showMarkDeceasedModal = false"
+      >
+        <div class="glass-card w-full max-w-lg p-6">
+          <h3 class="mb-1 text-lg font-semibold text-steel-700">Patient als verstorben markieren</h3>
+          <p class="mb-4 text-xs text-steel-400">Markieren Sie den Patienten als verstorben</p>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">
+                Todesdatum (optional)
+              </label>
+              <input
+                v-model="deceasedDate"
+                type="date"
+                class="w-full rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+              />
+              <p class="mt-1 text-xs text-steel-400">Wenn kein Datum angegeben wird, wird das heutige Datum verwendet</p>
+            </div>
+          </div>
+
+          <div class="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
+              @click="showMarkDeceasedModal = false; deceasedDate = ''"
+            >
+              Abbrechen
+            </button>
+            <button
+              type="button"
+              :disabled="isLoading"
+              class="rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-pane transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              @click="handleMarkDeceased"
+            >
+              {{ isLoading ? 'Wird markiert...' : 'Als verstorben markieren' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Delete Patient Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showDeletePatientModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+        @click.self="showDeletePatientModal = false"
+      >
+        <div class="glass-card w-full max-w-lg p-6">
+          <h3 class="mb-1 text-lg font-semibold text-red-700">Patient löschen</h3>
+          <p class="mb-4 text-xs text-steel-400">Diese Aktion kann nicht rückgängig gemacht werden</p>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">
+                Grund für die Löschung <span class="text-accent-sky">*</span>
+              </label>
+              <textarea
+                v-model="deletePatientReason"
+                rows="3"
+                placeholder="Bitte geben Sie einen Grund für die Löschung an..."
+                class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+              />
+            </div>
+          </div>
+
+          <div class="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
+              @click="showDeletePatientModal = false; deletePatientReason = ''"
+            >
+              Abbrechen
+            </button>
+            <button
+              type="button"
+              :disabled="isLoading || !deletePatientReason.trim()"
+              class="rounded-xl bg-gradient-to-br from-red-500 to-red-600 px-4 py-2 text-sm font-semibold text-white shadow-pane transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              @click="handleDeletePatientWithPasswordPrompt"
+            >
+              {{ isLoading ? 'Wird gelöscht...' : 'Löschen' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Edit Patient Modal -->
     <Teleport to="body">

@@ -33,6 +33,11 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0
 - Whitelabel-Funktionalität für Praxen: `logoUrl` und `primaryColor` Felder im Practice-Schema hinzugefügt.
 - Admin-Setup-Tools im `admin/`-Verzeichnis für Systeminitialisierung und Konfiguration.
 - Erweiterte Ollama-Funktionalität mit verbessertem System-Prompt für automatische ICD-Code-Ergänzung bei Diagnosen.
+- Patient-Verstorben-Status: Felder `deceased` und `deceasedDate` im Patient-Schema hinzugefügt; API-Endpunkt `PATCH /api/patients/:id/mark-deceased` zum Markieren von Patienten als verstorben.
+- Patient-Löschfunktion: Soft-Delete mit `isDeleted`, `deletedAt` und `deleteReason` Feldern; API-Endpunkt `DELETE /api/patients/:id` mit Admin-Passwort-Bestätigung.
+- Raumtypen-Verwaltung: `RoomType`-Tabelle für kategorisierte Raumverwaltung mit `roomTypeId`-Verknüpfung in `Room`-Tabelle.
+- Benutzertypen-Verwaltung: `UserType`-Tabelle für benutzerdefinierte Rollen mit Standard-Berechtigungen.
+- Praxis-Einstellungen: `PracticeSettings`-Tabelle für praxisweite Konfigurationen und Admin-Passwort-Verwaltung.
 
 ### Fixed
 
