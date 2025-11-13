@@ -1,0 +1,207 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-format:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install Dependencies (Backend)
+        working-directory: ./backend
+        run: npm ci
+      
+      - name: Install Dependencies (Frontend)
+        working-directory: ./frontend
+        run: npm ci
+      
+      - name: Lint Backend
+        working-directory: ./backend
+        run: npm run lint
+      
+      - name: Lint Frontend
+        working-directory: ./frontend
+        run: npm run lint
+      
+      - name: Format Check Backend
+        working-directory: ./backend
+        run: npm run format -- --check
+      
+      - name: Format Check Frontend
+        working-directory: ./frontend
+        run: npm run format -- --check
+      
+      - name: Type Check Backend
+        working-directory: ./backend
+        run: npm run type-check
+      
+      - name: Type Check Frontend
+        working-directory: ./frontend
+        run: npm run type-check
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install Dependencies (Backend)
+        working-directory: ./backend
+        run: npm ci
+      
+      - name: Run Tests (Backend)
+        working-directory: ./backend
+        run: npm run test
+      
+      - name: Run Tests (Frontend)
+        working-directory: ./frontend
+        run: npm run test
+
+  openapi-diff:
+    name: OpenAPI Diff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install Dependencies (Backend)
+        working-directory: ./backend
+        run: npm ci
+      
+      - name: Validate OpenAPI
+        working-directory: ./backend
+        run: npm run openapi:validate
+      
+      - name: OpenAPI Diff
+        working-directory: ./backend
+        run: |
+          # TODO: Implementiere OpenAPI Diff Check
+          # npm run openapi:diff
+
+  db-migrate-dry-run:
+    name: DB Migration Dry-Run
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sensarion_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install Dependencies (Backend)
+        working-directory: ./backend
+        run: npm ci
+      
+      - name: Setup Database
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sensarion_test
+        run: |
+          npm run db:generate
+          npm run db:migrate:dry
+
+  dependency-scan:
+    name: Dependency Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install Dependencies (Backend)
+        working-directory: ./backend
+        run: npm ci
+      
+      - name: Install Dependencies (Frontend)
+        working-directory: ./frontend
+        run: npm ci
+      
+      - name: Scan Backend Dependencies
+        working-directory: ./backend
+        run: npm run dep:scan
+      
+      - name: Scan Frontend Dependencies
+        working-directory: ./frontend
+        run: npm audit --audit-level=moderate
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint-format, test, openapi-diff, db-migrate-dry-run]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install Dependencies (Backend)
+        working-directory: ./backend
+        run: npm ci
+      
+      - name: Install Dependencies (Frontend)
+        working-directory: ./frontend
+        run: npm ci
+      
+      - name: Build Backend
+        working-directory: ./backend
+        run: npm run build
+      
+      - name: Build Frontend
+        working-directory: ./frontend
+        run: npm run build
+      
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            backend/dist
+            frontend/dist
+

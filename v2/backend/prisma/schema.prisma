@@ -1,0 +1,267 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// Multi-Tenant Core
+// ============================================================================
+
+model Tenant {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  
+  users       User[]
+  tenantModules TenantModule[]
+  patients    Patient[]
+  auditLogs   AuditLog[]
+  exports     Export[]
+  calendars   Calendar[]
+  
+  @@index([code])
+  @@index([deletedAt])
+}
+
+model User {
+  id          String   @id @default(uuid())
+  tenantId    String
+  email       String
+  passwordHash String
+  displayName String
+  shortName   String?
+  roles       String[] // RBAC: ["admin", "physician", "mfa", "administration"]
+  locale      String?  @default("de-DE")
+  avatarUrl   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  calendars   Calendar[]
+  eventParticipants CalendarEventParticipant[]
+  
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([tenantId, email])
+  @@index([deletedAt])
+}
+
+// ============================================================================
+// Module System
+// ============================================================================
+
+model Module {
+  id          String   @id @default(uuid())
+  code        String   @unique // "patients", "calendar", "exports", "ai-assistant"
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  
+  tenantModules TenantModule[]
+  
+  @@index([code])
+}
+
+model TenantModule {
+  id          String   @id @default(uuid())
+  tenantId    String
+  moduleId    String
+  plan        String   // "basic", "premium"
+  status      String   // "active", "suspended", "cancelled"
+  validFrom   DateTime
+  validTo     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  module      Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  
+  @@unique([tenantId, moduleId])
+  @@index([tenantId, status])
+  @@index([tenantId, validFrom, validTo])
+}
+
+// ============================================================================
+// Patients
+// ============================================================================
+
+model Patient {
+  id          String   @id @default(uuid())
+  tenantId    String
+  version     Int      @default(1) // Optimistic Locking
+  name        Json     // { given: string[], family: string }
+  birthDate   DateTime @db.Date
+  gender      String?  // "m", "w", "d"
+  tags        String[]
+  address     Json?    // { street, zip, city, country }
+  contact     Json?    // { phone, email, mobile }
+  insurance   Json?    // { number, type, provider }
+  vitalsLatest Json?   // Aktuelle Vitalwerte
+  vitalsHistory Json   @default("[]") // Array von Vitalwerte-Objekten
+  allergies   Json     @default("[]") // Array von Allergien
+  medications Json     @default("[]") // Array von Medikationen
+  diagnoses   Json     @default("[]") // Array von Diagnosen
+  findings    Json     @default("[]") // Array von Befunden
+  deceased    Boolean  @default(false)
+  deceasedDate DateTime? @db.Date
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  deleteReason String?
+  
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  encounters  Encounter[]
+  notes       PatientNote[]
+  calendarEvents CalendarEvent[]
+  
+  @@index([tenantId])
+  @@index([tenantId, updatedAt(sort: Desc)])
+  @@index([tenantId, deletedAt])
+  @@index([tenantId, birthDate])
+}
+
+model Encounter {
+  id        String   @id @default(uuid())
+  patientId String
+  date      DateTime @db.Date
+  location  String?
+  reason    String?
+  summary   String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  @@index([patientId, date(sort: Desc)])
+}
+
+model PatientNote {
+  id        String   @id @default(uuid())
+  patientId String
+  authorId  String   // User ID
+  text      String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  @@index([patientId, createdAt(sort: Desc)])
+}
+
+// ============================================================================
+// Audit & Exports
+// ============================================================================
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  tenantId    String
+  entityType  String   // "patient", "encounter", "user", "tenant"
+  entityId    String?
+  action      String   // "create", "update", "delete"
+  userId      String
+  changes     Json?    // { old: {...}, new: {...} }
+  reason      String?
+  timestamp   DateTime @default(now())
+  
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@index([tenantId, timestamp(sort: Desc)])
+  @@index([tenantId, entityType, entityId])
+  @@index([userId])
+}
+
+model Export {
+  id          String   @id @default(uuid())
+  tenantId    String
+  format      String   // "json", "ndjson", "fhir"
+  status      String   // "pending", "processing", "completed", "failed"
+  progress    Int      @default(0) // 0-100
+  error       String?  @db.Text
+  filePath    String?
+  fileSize    Int?
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+  
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt(sort: Desc)])
+}
+
+// ============================================================================
+// Calendar
+// ============================================================================
+
+enum CalendarType {
+  PERSONAL
+  ROOM
+  PURPOSE
+}
+
+model Calendar {
+  id          String        @id @default(uuid())
+  tenantId    String
+  name        String
+  type        CalendarType
+  roomId      String?
+  purpose     String?
+  color       String?
+  ownerId     String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner       User?         @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  events      CalendarEvent[]
+  
+  @@index([tenantId])
+  @@index([ownerId])
+}
+
+model CalendarEvent {
+  id              String                      @id @default(uuid())
+  calendarId      String
+  title           String
+  description     String?                     @db.Text
+  startTime       DateTime
+  endTime         DateTime
+  location        String?
+  patientId       String?
+  recurrenceRule  Json?                       // { type: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly', endAfter?: number, endDate?: string }
+  recurrenceEndDate DateTime?
+  createdBy       String
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+  
+  calendar        Calendar                    @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  patient         Patient?                    @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  participants    CalendarEventParticipant[]
+  
+  @@index([calendarId])
+  @@index([startTime, endTime])
+  @@index([patientId])
+  @@index([createdBy])
+}
+
+model CalendarEventParticipant {
+  id        String         @id @default(uuid())
+  eventId   String
+  userId    String
+  createdAt DateTime       @default(now())
+  
+  event     CalendarEvent  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+}
+

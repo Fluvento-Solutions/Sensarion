@@ -1,0 +1,112 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  
+  /* v2 CSS Variables (beibehalten für Kompatibilität) */
+  --color-primary: #3B82F6;
+  --color-secondary: #64748B;
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
+  --color-background: #FFFFFF;
+  --color-surface: #F8FAFC;
+  --color-text: #1E293B;
+  --color-text-secondary: #64748B;
+}
+
+body {
+  @apply relative h-[100dvh] w-full overflow-hidden text-steel-700 font-sans antialiased;
+  background:
+    linear-gradient(160deg, #f2f7fc 0%, #e6eef8 45%, #dbe5f1 100%),
+    radial-gradient(120% 160% at 50% 0%, rgba(255, 255, 255, 0.85), rgba(232, 241, 248, 0.95));
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  @apply flex h-[100dvh] w-full justify-center px-4 py-6 lg:px-10 lg:py-10;
+}
+
+.auth-surface {
+  @apply flex min-h-[100dvh] w-full items-center justify-center px-4 py-10;
+}
+
+.shell-surface {
+  @apply relative z-[1] flex h-full w-full max-w-[1440px] flex-col gap-6 rounded-[44px] px-4 py-6 lg:px-8 lg:py-8;
+}
+
+.shell-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 44px;
+  background: none;
+  border: none;
+  box-shadow: none;
+  z-index: 0;
+}
+
+.shell-surface::after {
+  content: '';
+  position: absolute;
+  inset: 18px;
+  border-radius: 34px;
+  background: none;
+  opacity: 0;
+  filter: none;
+  z-index: 0;
+}
+
+.shell-surface > * {
+  position: relative;
+  z-index: 1;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(90% 130% at 50% 5%, rgba(255, 255, 255, 0.7), transparent 65%),
+    radial-gradient(110% 160% at 15% 85%, rgba(24, 180, 166, 0.14), transparent 75%),
+    radial-gradient(110% 160% at 85% 80%, rgba(26, 127, 216, 0.14), transparent 75%);
+  mix-blend-mode: lighten;
+  z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: none;
+  opacity: 0.22;
+  mix-blend-mode: overlay;
+  z-index: 0;
+}
+
+.glass-card {
+  @apply overflow-hidden rounded-3xl border border-white/55 bg-gradient-to-br from-white via-[#f3f6fb] to-surface-glass backdrop-blur-2xl;
+}
+
+.skeleton-block {
+  @apply animate-pulse bg-white/40 border border-white/20 rounded-2xl;
+}
+
+/* Unsichtbare Scrollbars */
+.scrollbar-hide {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+

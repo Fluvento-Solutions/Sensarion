@@ -1,0 +1,971 @@
+openapi: 3.1.0
+info:
+  title: Sensarion v2 API
+  version: 2.0.0
+  description: |
+    Praxisverwaltungs-Software mit Multi-Tenant-Support, AI-Integration und modularem Billing.
+    
+    ## Authentifizierung
+    
+    Die API verwendet JWT (JSON Web Tokens) für Authentifizierung:
+    1. `POST /auth/login` - Erhalte Access Token + Refresh Token
+    2. `POST /auth/refresh` - Erneuere Access Token mit Refresh Token
+    3. Alle anderen Endpoints benötigen `Authorization: Bearer <token>` Header
+    
+    ## Fehlerbehandlung
+    
+    Alle Fehler folgen RFC 7807 (Problem Details for HTTP APIs):
+    - `type`: URI zur Fehler-Dokumentation
+    - `title`: Kurze Fehlerbeschreibung
+    - `status`: HTTP Status Code
+    - `detail`: Detaillierte Fehlermeldung
+    - `instance`: Request-URI (optional)
+    
+    ## Multi-Tenant
+    
+    Jeder Request ist automatisch auf den Tenant des authentifizierten Benutzers beschränkt (via RLS).
+    
+    ## Module-System
+    
+    Features sind modul-basiert. Prüfe `/modules` für verfügbare Module und `/tenant-modules` für aktive Subscriptions.
+  contact:
+    name: Sensarion Support
+    email: support@sensarion.local
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:4000
+    description: Development
+  - url: https://api.sensarion.local
+    description: Production
+
+tags:
+  - name: Health
+    description: Health Check
+  - name: Auth
+    description: Authentifizierung
+  - name: Tenants
+    description: Tenant-Management
+  - name: Modules
+    description: Modul-Katalog
+  - name: TenantModules
+    description: Module-Subscriptions
+  - name: Patients
+    description: Patientenverwaltung
+  - name: Exports
+    description: Datenexport (JSON/FHIR)
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health Check
+      description: Prüft ob der Service verfügbar ist
+      security: []
+      responses:
+        '200':
+          description: Service ist verfügbar
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: '2024-01-15T12:00:00Z'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      description: Authentifiziert einen Benutzer und gibt JWT + Refresh Token zurück
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login erfolgreich
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh Token
+      description: Erneuert Access Token mit Refresh Token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        '200':
+          description: Token erneuert
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                  refreshToken:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /tenants:
+    get:
+      tags: [Tenants]
+      summary: Liste Tenants
+      description: Gibt alle Tenants zurück (nur für Super-Admin)
+      responses:
+        '200':
+          description: Liste der Tenants
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tenants:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Tenant'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Tenants]
+      summary: Erstelle Tenant
+      description: Erstellt einen neuen Tenant (nur für Super-Admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTenantRequest'
+      responses:
+        '201':
+          description: Tenant erstellt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /tenants/{tenantId}:
+    get:
+      tags: [Tenants]
+      summary: Tenant-Details
+      description: Gibt Details eines Tenants zurück
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Tenant-Details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /modules:
+    get:
+      tags: [Modules]
+      summary: Modul-Katalog
+      description: Gibt alle verfügbaren Module zurück
+      responses:
+        '200':
+          description: Liste der Module
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  modules:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Module'
+
+  /tenant-modules:
+    get:
+      tags: [TenantModules]
+      summary: Aktive Subscriptions
+      description: Gibt alle aktiven Module-Subscriptions für den aktuellen Tenant zurück
+      responses:
+        '200':
+          description: Liste der Subscriptions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subscriptions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TenantModule'
+
+    post:
+      tags: [TenantModules]
+      summary: Abonniere Modul
+      description: Abonniert ein Modul für den aktuellen Tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [moduleCode, plan]
+              properties:
+                moduleCode:
+                  type: string
+                  example: patients
+                plan:
+                  type: string
+                  enum: [basic, premium]
+                  example: basic
+      responses:
+        '201':
+          description: Modul abonniert
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantModule'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '402':
+          description: Payment Required
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /tenant-modules/{subscriptionId}:
+    delete:
+      tags: [TenantModules]
+      summary: Kündige Subscription
+      description: Kündigt eine Module-Subscription
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Subscription gekündigt
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /patients:
+    get:
+      tags: [Patients]
+      summary: Liste Patienten
+      description: Gibt alle Patienten des aktuellen Tenants zurück (mit optionaler Suche)
+      parameters:
+        - name: q
+          in: query
+          description: Suchbegriff (Name, Tags)
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximale Anzahl Ergebnisse
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+        - name: offset
+          in: query
+          description: Offset für Pagination
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Liste der Patienten
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  patients:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Patient'
+                  total:
+                    type: integer
+                    description: Gesamtanzahl (für Pagination)
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Patients]
+      summary: Erstelle Patient
+      description: Erstellt einen neuen Patienten
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePatientRequest'
+      responses:
+        '201':
+          description: Patient erstellt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /patients/{patientId}:
+    get:
+      tags: [Patients]
+      summary: Patient-Details
+      description: Gibt Details eines Patienten zurück
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+      responses:
+        '200':
+          description: Patient-Details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    patch:
+      tags: [Patients]
+      summary: Update Patient
+      description: Aktualisiert einen Patienten (mit Optimistic Locking)
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+        - name: If-Match
+          in: header
+          description: Aktuelle Version (für Optimistic Locking)
+          required: true
+          schema:
+            type: integer
+            example: 5
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePatientRequest'
+      responses:
+        '200':
+          description: Patient aktualisiert
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          description: Version Conflict (Optimistic Locking)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    delete:
+      tags: [Patients]
+      summary: Lösche Patient
+      description: Soft-Delete eines Patienten
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+      responses:
+        '204':
+          description: Patient gelöscht
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /exports:
+    post:
+      tags: [Exports]
+      summary: Starte Export
+      description: Startet einen Datenexport (JSON oder FHIR)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [format]
+              properties:
+                format:
+                  type: string
+                  enum: [json, ndjson, fhir]
+                  example: json
+                includeDeleted:
+                  type: boolean
+                  default: false
+                  description: Gelöschte Einträge einschließen
+      responses:
+        '202':
+          description: Export gestartet
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exportId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [pending, processing, completed, failed]
+                    example: pending
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    get:
+      tags: [Exports]
+      summary: Liste Exports
+      description: Gibt alle Exports des aktuellen Tenants zurück
+      responses:
+        '200':
+          description: Liste der Exports
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exports:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Export'
+
+  /exports/{exportId}:
+    get:
+      tags: [Exports]
+      summary: Export-Status
+      description: Gibt den Status eines Exports zurück
+      parameters:
+        - name: exportId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Export-Status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Export'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /exports/{exportId}/download:
+    get:
+      tags: [Exports]
+      summary: Download Export
+      description: Lädt einen abgeschlossenen Export herunter
+      parameters:
+        - name: exportId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Export-Datei
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          description: Export noch nicht abgeschlossen
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Access Token
+
+  parameters:
+    TenantId:
+      name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Tenant-ID
+    
+    PatientId:
+      name: patientId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Patient-ID
+
+  schemas:
+    ProblemDetails:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type:
+          type: string
+          format: uri
+          example: 'https://sensarion.local/errors/patient-not-found'
+          description: URI zur Fehler-Dokumentation
+        title:
+          type: string
+          example: Patient not found
+          description: Kurze Fehlerbeschreibung
+        status:
+          type: integer
+          example: 404
+          description: HTTP Status Code
+        detail:
+          type: string
+          example: 'Patient 550e8400-e29b-41d4-a716-446655440000 not found in tenant 123e4567-e89b-12d3-a456-426614174000'
+          description: Detaillierte Fehlermeldung
+        instance:
+          type: string
+          format: uri
+          example: '/patients/550e8400-e29b-41d4-a716-446655440000'
+          description: Request-URI (optional)
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: max.mustermann@sensarion.local
+        password:
+          type: string
+          format: password
+          example: '********'
+
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        refreshToken:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        user:
+          $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        tenantId:
+          type: string
+          format: uuid
+        roles:
+          type: array
+          items:
+            type: string
+            enum: [admin, physician, mfa, administration]
+
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Praxis Mustermann
+        code:
+          type: string
+          example: praxis-mustermann
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateTenantRequest:
+      type: object
+      required: [name, code]
+      properties:
+        name:
+          type: string
+          example: Praxis Mustermann
+        code:
+          type: string
+          example: praxis-mustermann
+          pattern: '^[a-z0-9-]+$'
+
+    Module:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          example: patients
+        name:
+          type: string
+          example: Patientenverwaltung
+        description:
+          type: string
+          example: Verwaltung von Patienten, Vitalwerten, Diagnosen
+
+    TenantModule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        moduleId:
+          type: string
+          format: uuid
+        module:
+          $ref: '#/components/schemas/Module'
+        plan:
+          type: string
+          enum: [basic, premium]
+        status:
+          type: string
+          enum: [active, suspended, cancelled]
+        validFrom:
+          type: string
+          format: date-time
+        validTo:
+          type: string
+          format: date-time
+          nullable: true
+
+    PatientName:
+      type: object
+      required: [given, family]
+      properties:
+        given:
+          type: array
+          items:
+            type: string
+          example: [Max, Peter]
+        family:
+          type: string
+          example: Mustermann
+
+    CreatePatientRequest:
+      type: object
+      required: [name, birthDate]
+      properties:
+        name:
+          $ref: '#/components/schemas/PatientName'
+        birthDate:
+          type: string
+          format: date
+          example: '1980-01-01'
+        gender:
+          type: string
+          enum: [m, w, d]
+        tags:
+          type: array
+          items:
+            type: string
+        address:
+          type: object
+          properties:
+            street:
+              type: string
+            zip:
+              type: string
+            city:
+              type: string
+            country:
+              type: string
+        contact:
+          type: object
+          properties:
+            phone:
+              type: string
+            email:
+              type: string
+            mobile:
+              type: string
+        insurance:
+          type: object
+          properties:
+            number:
+              type: string
+            type:
+              type: string
+            provider:
+              type: string
+
+    UpdatePatientRequest:
+      type: object
+      properties:
+        name:
+          $ref: '#/components/schemas/PatientName'
+        birthDate:
+          type: string
+          format: date
+        gender:
+          type: string
+          enum: [m, w, d]
+        tags:
+          type: array
+          items:
+            type: string
+        address:
+          type: object
+        contact:
+          type: object
+        insurance:
+          type: object
+
+    Patient:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          description: Optimistic Locking Version
+        name:
+          $ref: '#/components/schemas/PatientName'
+        birthDate:
+          type: string
+          format: date
+        gender:
+          type: string
+          enum: [m, w, d]
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        address:
+          type: object
+          nullable: true
+        contact:
+          type: object
+          nullable: true
+        insurance:
+          type: object
+          nullable: true
+        vitalsLatest:
+          type: object
+          nullable: true
+        vitalsHistory:
+          type: array
+          items:
+            type: object
+        allergies:
+          type: array
+          items:
+            type: object
+        medications:
+          type: array
+          items:
+            type: object
+        diagnoses:
+          type: array
+          items:
+            type: object
+        findings:
+          type: array
+          items:
+            type: object
+        deceased:
+          type: boolean
+          default: false
+        deceasedDate:
+          type: string
+          format: date
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Export:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        format:
+          type: string
+          enum: [json, ndjson, fhir]
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Fortschritt in Prozent
+        error:
+          type: string
+          nullable: true
+          description: Fehlermeldung (falls status=failed)
+        fileSize:
+          type: integer
+          nullable: true
+          description: Dateigröße in Bytes
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+  responses:
+    BadRequest:
+      description: Bad Request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: 'https://sensarion.local/errors/bad-request'
+            title: Bad Request
+            status: 400
+            detail: 'Invalid request payload'
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: 'https://sensarion.local/errors/unauthorized'
+            title: Unauthorized
+            status: 401
+            detail: 'Authentication required'
+
+    Forbidden:
+      description: Forbidden
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: 'https://sensarion.local/errors/forbidden'
+            title: Forbidden
+            status: 403
+            detail: 'Insufficient permissions'
+
+    NotFound:
+      description: Not Found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: 'https://sensarion.local/errors/not-found'
+            title: Not Found
+            status: 404
+            detail: 'Resource not found'
+
+    InternalServerError:
+      description: Internal Server Error
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: 'https://sensarion.local/errors/internal-server-error'
+            title: Internal Server Error
+            status: 500
+            detail: 'An unexpected error occurred'
+
