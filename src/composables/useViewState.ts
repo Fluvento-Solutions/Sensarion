@@ -1,6 +1,6 @@
 import { computed, reactive } from 'vue';
 
-export type ViewType = 'overview' | 'ki-test' | 'patients';
+export type ViewType = 'overview' | 'ki-test' | 'patients' | 'calendar' | 'admin';
 
 export type OllamaModel = 'gemma3:12b';
 

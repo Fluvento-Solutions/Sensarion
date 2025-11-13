@@ -36,12 +36,13 @@ type AuthenticatedRequestWithUser = AuthenticatedRequest & { authUser: NonNullab
 // Helper: Erstelle Audit-Log
 const createAuditLog = (
   action: 'create' | 'update' | 'delete' | 'add' | 'remove',
-  entityType: 'patient' | 'vital' | 'allergy' | 'medication' | 'note' | 'encounter',
+  entityType: 'patient' | 'vital' | 'allergy' | 'medication' | 'note' | 'encounter' | 'diagnosis' | 'finding',
   entityId: string | undefined,
   entityName: string | undefined,
   description: string,
   author: string,
-  changes?: Record<string, { old?: string; new?: string }>
+  changes?: Record<string, { old?: string; new?: string }>,
+  reason?: string
 ) => {
   return {
     id: `audit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -52,7 +53,8 @@ const createAuditLog = (
     entity_name: entityName,
     changes,
     author,
-    description
+    description,
+    reason: reason || undefined
   };
 };
 
@@ -113,7 +115,8 @@ const createPatientSchema = z.object({
   vitalsLatest: z.record(z.unknown()).optional(),
   allergies: z.array(z.object({
     substance: z.string(),
-    severity: z.string()
+    severity: z.string(),
+    notes: z.string().optional()
   })).optional().default([]),
   medications: z.array(z.object({
     name: z.string(),
@@ -121,7 +124,9 @@ const createPatientSchema = z.object({
   })).optional().default([])
 });
 
-const updatePatientSchema = createPatientSchema.partial();
+const updatePatientSchema = createPatientSchema.partial().extend({
+  reason: z.string().min(1, 'Grund für die Änderung ist erforderlich')
+});
 
 const createVitalSchema = z.object({
   bp_systolic: z.number().optional(),
@@ -130,12 +135,37 @@ const createVitalSchema = z.object({
   temperature: z.number().optional(),
   spo2: z.number().optional(),
   glucose: z.number().optional(),
-  bmi: z.number().optional()
+  weight: z.number().optional(),
+  height: z.number().optional(),
+  bmi: z.number().optional(),
+  pain_scale: z.number().min(1).max(10).optional(),
+  pmh_responses: z.array(z.number().min(0).max(3)).length(9).optional(),
+  pmh_total: z.number().min(0).max(27).optional()
+});
+
+const updateVitalSchema = createVitalSchema.extend({
+  reason: z.string().min(1, 'Grund für die Änderung ist erforderlich')
+});
+
+const deleteVitalSchema = z.object({
+  reason: z.string().min(1, 'Grund für die Löschung ist erforderlich')
 });
 
 const addAllergySchema = z.object({
   substance: z.string().min(1, 'Substanz erforderlich'),
-  severity: z.string().min(1, 'Schweregrad erforderlich')
+  severity: z.string().min(1, 'Schweregrad erforderlich'),
+  notes: z.string().optional()
+});
+
+const updateAllergySchema = z.object({
+  substance: z.string().min(1, 'Substanz erforderlich'),
+  severity: z.string().min(1, 'Schweregrad erforderlich'),
+  notes: z.string().optional(),
+  reason: z.string().min(1, 'Grund für die Änderung ist erforderlich')
+});
+
+const deleteAllergySchema = z.object({
+  reason: z.string().min(1, 'Grund für die Löschung ist erforderlich')
 });
 
 const addMedicationSchema = z.object({
@@ -163,7 +193,8 @@ const updateMedicationSchema = z.object({
   dose_midday: z.string().optional(),
   dose_evening: z.string().optional(),
   dose_night: z.string().optional(),
-  notes: z.string().optional()
+  notes: z.string().optional(),
+  reason: z.string().min(1, 'Grund für die Änderung ist erforderlich')
 }).refine(
   (data) => {
     // Mindestens eine Dosierung muss angegeben sein
@@ -174,6 +205,10 @@ const updateMedicationSchema = z.object({
   }
 );
 
+const deleteMedicationSchema = z.object({
+  reason: z.string().min(1, 'Grund für die Löschung ist erforderlich')
+});
+
 const createNoteSchema = z.object({
   text: z.string().min(1, 'Notiz-Text erforderlich')
 });
@@ -183,6 +218,32 @@ const createEncounterSchema = z.object({
   location: z.string().optional(),
   reason: z.string().optional(),
   summary: z.string().optional()
+});
+
+const addDiagnosisSchema = z.object({
+  text: z.string().min(1, 'Diagnose-Text erforderlich')
+});
+
+const updateDiagnosisSchema = z.object({
+  text: z.string().min(1, 'Diagnose-Text erforderlich'),
+  reason: z.string().min(1, 'Grund für die Änderung ist erforderlich')
+});
+
+const deleteDiagnosisSchema = z.object({
+  reason: z.string().min(1, 'Grund für die Löschung ist erforderlich')
+});
+
+const addFindingSchema = z.object({
+  text: z.string().min(1, 'Befund-Text erforderlich')
+});
+
+const updateFindingSchema = z.object({
+  text: z.string().min(1, 'Befund-Text erforderlich'),
+  reason: z.string().min(1, 'Grund für die Änderung ist erforderlich')
+});
+
+const deleteFindingSchema = z.object({
+  reason: z.string().min(1, 'Grund für die Löschung ist erforderlich')
 });
 
 // GET /api/patients - Liste & Suche
@@ -361,7 +422,9 @@ router.get('/:id', requireAuth, async (req, res) => {
         vitals_latest: patient.vitalsLatest,
         vitals_history: patient.vitalsHistory,
         allergies: patient.allergies,
-        medications: patient.medications
+        medications: patient.medications,
+        diagnoses: patient.diagnoses,
+        findings: patient.findings
       }
     });
   } catch (error) {
@@ -431,25 +494,62 @@ router.patch('/:id', requireAuth, async (req, res) => {
       });
     }
 
+    const { reason, ...updateFields } = parsed.data;
+    
     const updateData: Prisma.PatientUpdateInput = {
       version: { increment: 1 }
     };
 
-    if (parsed.data.name) updateData.name = parsed.data.name;
-    if (parsed.data.birthDate) updateData.birthDate = new Date(parsed.data.birthDate);
-    if (parsed.data.gender !== undefined) updateData.gender = parsed.data.gender;
-    if (parsed.data.tags !== undefined) updateData.tags = parsed.data.tags;
-    if (parsed.data.address !== undefined) updateData.address = parsed.data.address;
-    if (parsed.data.contact !== undefined) updateData.contact = parsed.data.contact;
-    if (parsed.data.insurance !== undefined) updateData.insurance = parsed.data.insurance;
-    if (parsed.data.vitalsLatest !== undefined) updateData.vitalsLatest = parsed.data.vitalsLatest;
-    if (parsed.data.allergies !== undefined) updateData.allergies = parsed.data.allergies;
-    if (parsed.data.medications !== undefined) updateData.medications = parsed.data.medications;
+    if (updateFields.name) updateData.name = updateFields.name;
+    if (updateFields.birthDate) updateData.birthDate = new Date(updateFields.birthDate);
+    if (updateFields.gender !== undefined) updateData.gender = updateFields.gender;
+    if (updateFields.tags !== undefined) updateData.tags = updateFields.tags;
+    if (updateFields.address !== undefined) updateData.address = updateFields.address;
+    if (updateFields.contact !== undefined) updateData.contact = updateFields.contact;
+    if (updateFields.insurance !== undefined) updateData.insurance = updateFields.insurance;
+    if (updateFields.vitalsLatest !== undefined) updateData.vitalsLatest = updateFields.vitalsLatest;
+    if (updateFields.allergies !== undefined) updateData.allergies = updateFields.allergies;
+    if (updateFields.medications !== undefined) updateData.medications = updateFields.medications;
 
     const patient = await prisma.patient.update({
       where: { id: req.params.id },
       data: updateData
     });
+
+    // Audit-Log erstellen
+    const changes: Record<string, { old?: string; new?: string }> = {};
+    if (updateFields.name && JSON.stringify(current.name) !== JSON.stringify(updateFields.name)) {
+      changes.name = { 
+        old: JSON.stringify(current.name), 
+        new: JSON.stringify(updateFields.name) 
+      };
+    }
+    if (updateFields.birthDate && current.birthDate.toISOString().split('T')[0] !== updateFields.birthDate) {
+      changes.birthDate = { 
+        old: current.birthDate.toISOString().split('T')[0], 
+        new: updateFields.birthDate 
+      };
+    }
+    if (updateFields.gender !== undefined && current.gender !== updateFields.gender) {
+      changes.gender = { old: current.gender || '', new: updateFields.gender || '' };
+    }
+
+    const nameObj = current.name as { given?: string[]; family?: string };
+    const patientName = `${(nameObj.given || []).join(' ')} ${nameObj.family || ''}`.trim();
+
+    await addAuditLogToPatient(
+      req.params.id,
+      createAuditLog(
+        'update',
+        'patient',
+        req.params.id,
+        patientName,
+        `Patientendaten geändert`,
+        user.shortName || user.displayName,
+        Object.keys(changes).length > 0 ? changes : undefined,
+        reason
+      )
+    );
 
     return res.json({
       status: 'ok',
@@ -466,7 +566,9 @@ router.patch('/:id', requireAuth, async (req, res) => {
         vitals_latest: patient.vitalsLatest,
         vitals_history: patient.vitalsHistory,
         allergies: patient.allergies,
-        medications: patient.medications
+        medications: patient.medications,
+        diagnoses: patient.diagnoses,
+        findings: patient.findings
       }
     });
   } catch (error) {
@@ -794,7 +896,12 @@ router.post('/:id/vitals', requireAuth, async (req, res) => {
       temperature: parsed.data.temperature,
       spo2: parsed.data.spo2,
       glucose: parsed.data.glucose,
+      weight: parsed.data.weight,
+      height: parsed.data.height,
       bmi: parsed.data.bmi,
+      pain_scale: parsed.data.pain_scale,
+      pmh_responses: parsed.data.pmh_responses,
+      pmh_total: parsed.data.pmh_total,
       updated_at: new Date().toISOString()
     };
 
@@ -883,21 +990,22 @@ router.patch('/:id/vitals/:vitalId', requireAuth, async (req, res) => {
     }
 
     const oldVital = vitalsHistory[vitalIndex];
+    const { reason, ...updateFields } = parsed.data;
     const changes: Record<string, { old?: string; new?: string }> = {};
     
-    Object.keys(parsed.data).forEach(key => {
-      const typedKey = key as keyof typeof parsed.data;
-      if (parsed.data[typedKey] !== undefined && oldVital[typedKey] !== parsed.data[typedKey]) {
+    Object.keys(updateFields).forEach(key => {
+      const typedKey = key as keyof typeof updateFields;
+      if (updateFields[typedKey] !== undefined && oldVital[typedKey] !== updateFields[typedKey]) {
         changes[key] = {
           old: oldVital[typedKey]?.toString(),
-          new: parsed.data[typedKey]?.toString()
+          new: updateFields[typedKey]?.toString()
         };
       }
     });
 
     vitalsHistory[vitalIndex] = {
       ...oldVital,
-      ...parsed.data
+      ...updateFields
     };
 
     // Update vitalsLatest wenn es der neueste Eintrag ist
@@ -937,7 +1045,8 @@ router.patch('/:id/vitals/:vitalId', requireAuth, async (req, res) => {
         'Vitalwerte',
         `Vitalwerte vom ${new Date(oldVital.recordedAt).toLocaleDateString('de-DE')} bearbeitet`,
         user.shortName || user.displayName,
-        changes
+        changes,
+        reason
       )
     );
 
@@ -962,6 +1071,14 @@ router.delete('/:id/vitals/:vitalId', requireAuth, async (req, res) => {
       return res.status(403).json({
         status: 'error',
         message: 'Keine Praxis zugeordnet'
+      });
+    }
+
+    const parsed = deleteVitalSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        status: 'error',
+        errors: parsed.error.flatten().fieldErrors
       });
     }
 
@@ -1010,7 +1127,9 @@ router.delete('/:id/vitals/:vitalId', requireAuth, async (req, res) => {
         vital.id,
         'Vitalwerte',
         `Vitalwerte vom ${new Date(vital.recordedAt).toLocaleDateString('de-DE')} entfernt`,
-        user.shortName || user.displayName
+        user.shortName || user.displayName,
+        undefined,
+        parsed.data.reason
       )
     );
 
@@ -1145,18 +1264,19 @@ router.patch('/:id/allergies/:allergyId', requireAuth, async (req, res) => {
     }
 
     const oldAllergy = allergies[allergyIndex];
+    const { reason, ...updateFields } = parsed.data;
     const changes: Record<string, { old?: string; new?: string }> = {};
     
-    if (oldAllergy.substance !== parsed.data.substance) {
-      changes.substance = { old: oldAllergy.substance, new: parsed.data.substance };
+    if (oldAllergy.substance !== updateFields.substance) {
+      changes.substance = { old: oldAllergy.substance, new: updateFields.substance };
     }
-    if (oldAllergy.severity !== parsed.data.severity) {
-      changes.severity = { old: oldAllergy.severity, new: parsed.data.severity };
+    if (oldAllergy.severity !== updateFields.severity) {
+      changes.severity = { old: oldAllergy.severity, new: updateFields.severity };
     }
 
     allergies[allergyIndex] = {
       ...oldAllergy,
-      ...parsed.data
+      ...updateFields
     };
 
     await prisma.patient.update({
@@ -1171,10 +1291,11 @@ router.patch('/:id/allergies/:allergyId', requireAuth, async (req, res) => {
         'update',
         'allergy',
         oldAllergy.id,
-        parsed.data.substance,
-        `Allergie "${parsed.data.substance}" bearbeitet`,
+        updateFields.substance,
+        `Allergie "${updateFields.substance}" bearbeitet`,
         user.shortName || user.displayName,
-        changes
+        changes,
+        reason
       )
     );
 
@@ -1199,6 +1320,14 @@ router.delete('/:id/allergies/:allergyId', requireAuth, async (req, res) => {
       return res.status(403).json({
         status: 'error',
         message: 'Keine Praxis zugeordnet'
+      });
+    }
+
+    const parsed = deleteAllergySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        status: 'error',
+        errors: parsed.error.flatten().fieldErrors
       });
     }
 
@@ -1247,7 +1376,9 @@ router.delete('/:id/allergies/:allergyId', requireAuth, async (req, res) => {
         allergy.id,
         allergy.substance,
         `Allergie "${allergy.substance}" entfernt`,
-        user.shortName || user.displayName
+        user.shortName || user.displayName,
+        undefined,
+        parsed.data.reason
       )
     );
 
@@ -1382,15 +1513,16 @@ router.patch('/:id/medications/:medicationId', requireAuth, async (req, res) => 
     }
 
     const oldMedication = medications[medicationIndex];
+    const { reason, ...updateFields } = parsed.data;
     const changes: Record<string, { old?: string; new?: string }> = {};
     
-    if (oldMedication.name !== parsed.data.name) {
-      changes.name = { old: oldMedication.name, new: parsed.data.name };
+    if (oldMedication.name !== updateFields.name) {
+      changes.name = { old: oldMedication.name, new: updateFields.name };
     }
 
     medications[medicationIndex] = {
       ...oldMedication,
-      ...parsed.data
+      ...updateFields
     };
 
     await prisma.patient.update({
@@ -1405,10 +1537,11 @@ router.patch('/:id/medications/:medicationId', requireAuth, async (req, res) => 
         'update',
         'medication',
         oldMedication.id,
-        parsed.data.name,
-        `Medikation "${parsed.data.name}" bearbeitet`,
+        updateFields.name,
+        `Medikation "${updateFields.name}" bearbeitet`,
         user.shortName || user.displayName,
-        changes
+        changes,
+        reason
       )
     );
 
@@ -1436,6 +1569,14 @@ router.delete('/:id/medications/:medicationId', requireAuth, async (req, res) =>
       });
     }
 
+    const parsed = deleteMedicationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        status: 'error',
+        errors: parsed.error.flatten().fieldErrors
+      });
+    }
+
     const patient = await prisma.patient.findFirst({
       where: {
         id: req.params.id,
@@ -1460,8 +1601,9 @@ router.delete('/:id/medications/:medicationId', requireAuth, async (req, res) =>
       });
     }
 
+    const medication = medications[medicationIndex];
     medications[medicationIndex] = {
-      ...medications[medicationIndex],
+      ...medication,
       is_deleted: true,
       deleted_at: new Date().toISOString()
     };
@@ -1470,6 +1612,21 @@ router.delete('/:id/medications/:medicationId', requireAuth, async (req, res) =>
       where: { id: req.params.id },
       data: { medications }
     });
+
+    // Audit-Log erstellen
+    await addAuditLogToPatient(
+      req.params.id,
+      createAuditLog(
+        'remove',
+        'medication',
+        medication.id,
+        medication.name,
+        `Medikation "${medication.name}" entfernt`,
+        user.shortName || user.displayName,
+        undefined,
+        parsed.data.reason
+      )
+    );
 
     return res.json({
       status: 'ok',
@@ -1521,6 +1678,500 @@ router.get('/:id/audit-logs', requireAuth, async (req, res) => {
     return res.status(500).json({
       status: 'error',
       message: 'Fehler beim Laden der Audit-Logs'
+    });
+  }
+});
+
+// POST /api/patients/:id/diagnoses - Diagnose hinzufügen
+router.post('/:id/diagnoses', requireAuth, async (req, res) => {
+  try {
+    const user = (req as AuthenticatedRequestWithUser).authUser;
+    if (!user?.practiceId) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Keine Praxis zugeordnet'
+      });
+    }
+
+    const parsed = addDiagnosisSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        status: 'error',
+        errors: parsed.error.flatten().fieldErrors
+      });
+    }
+
+    const patient = await prisma.patient.findFirst({
+      where: {
+        id: req.params.id,
+        practiceId: user.practiceId
+      }
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Patient nicht gefunden'
+      });
+    }
+
+    const diagnoses = (patient.diagnoses as any[]) || [];
+    const newDiagnosis = {
+      id: `diagnosis-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      text: parsed.data.text,
+      created_at: new Date().toISOString(),
+      is_deleted: false,
+      deleted_at: null
+    };
+
+    diagnoses.push(newDiagnosis);
+
+    await prisma.patient.update({
+      where: { id: req.params.id },
+      data: { diagnoses }
+    });
+
+    // Audit-Log erstellen
+    await addAuditLogToPatient(
+      req.params.id,
+      createAuditLog(
+        'add',
+        'diagnosis',
+        newDiagnosis.id,
+        'Diagnose',
+        `Diagnose hinzugefügt`,
+        user.shortName || user.displayName
+      )
+    );
+
+    return res.status(201).json({
+      status: 'ok',
+      diagnosis: newDiagnosis
+    });
+  } catch (error) {
+    console.error('add diagnosis failed', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Fehler beim Hinzufügen der Diagnose'
+    });
+  }
+});
+
+// PATCH /api/patients/:id/diagnoses/:diagnosisId - Diagnose bearbeiten
+router.patch('/:id/diagnoses/:diagnosisId', requireAuth, async (req, res) => {
+  try {
+    const user = (req as AuthenticatedRequestWithUser).authUser;
+    if (!user?.practiceId) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Keine Praxis zugeordnet'
+      });
+    }
+
+    const parsed = updateDiagnosisSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        status: 'error',
+        errors: parsed.error.flatten().fieldErrors
+      });
+    }
+
+    const patient = await prisma.patient.findFirst({
+      where: {
+        id: req.params.id,
+        practiceId: user.practiceId
+      }
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Patient nicht gefunden'
+      });
+    }
+
+    const diagnoses = (patient.diagnoses as any[]) || [];
+    const diagnosisIndex = diagnoses.findIndex(d => d.id === req.params.diagnosisId);
+
+    if (diagnosisIndex === -1) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Diagnose nicht gefunden'
+      });
+    }
+
+    const oldDiagnosis = diagnoses[diagnosisIndex];
+    const { reason, ...updateFields } = parsed.data;
+    const changes: Record<string, { old?: string; new?: string }> = {};
+    
+    if (oldDiagnosis.text !== updateFields.text) {
+      changes.text = { old: oldDiagnosis.text, new: updateFields.text };
+    }
+
+    diagnoses[diagnosisIndex] = {
+      ...oldDiagnosis,
+      ...updateFields
+    };
+
+    await prisma.patient.update({
+      where: { id: req.params.id },
+      data: { diagnoses }
+    });
+
+    // Audit-Log erstellen
+    await addAuditLogToPatient(
+      req.params.id,
+      createAuditLog(
+        'update',
+        'diagnosis',
+        oldDiagnosis.id,
+        'Diagnose',
+        `Diagnose bearbeitet`,
+        user.shortName || user.displayName,
+        changes,
+        reason
+      )
+    );
+
+    return res.json({
+      status: 'ok',
+      diagnosis: diagnoses[diagnosisIndex]
+    });
+  } catch (error) {
+    console.error('update diagnosis failed', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Fehler beim Bearbeiten der Diagnose'
+    });
+  }
+});
+
+// DELETE /api/patients/:id/diagnoses/:diagnosisId - Diagnose Soft Delete
+router.delete('/:id/diagnoses/:diagnosisId', requireAuth, async (req, res) => {
+  try {
+    const user = (req as AuthenticatedRequestWithUser).authUser;
+    if (!user?.practiceId) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Keine Praxis zugeordnet'
+      });
+    }
+
+    const parsed = deleteDiagnosisSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        status: 'error',
+        errors: parsed.error.flatten().fieldErrors
+      });
+    }
+
+    const patient = await prisma.patient.findFirst({
+      where: {
+        id: req.params.id,
+        practiceId: user.practiceId
+      }
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Patient nicht gefunden'
+      });
+    }
+
+    const diagnoses = (patient.diagnoses as any[]) || [];
+    const diagnosisIndex = diagnoses.findIndex(d => d.id === req.params.diagnosisId);
+
+    if (diagnosisIndex === -1) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Diagnose nicht gefunden'
+      });
+    }
+
+    const diagnosis = diagnoses[diagnosisIndex];
+    diagnoses[diagnosisIndex] = {
+      ...diagnosis,
+      is_deleted: true,
+      deleted_at: new Date().toISOString()
+    };
+
+    await prisma.patient.update({
+      where: { id: req.params.id },
+      data: { diagnoses }
+    });
+
+    // Audit-Log erstellen
+    await addAuditLogToPatient(
+      req.params.id,
+      createAuditLog(
+        'remove',
+        'diagnosis',
+        diagnosis.id,
+        'Diagnose',
+        `Diagnose entfernt`,
+        user.shortName || user.displayName,
+        undefined,
+        parsed.data.reason
+      )
+    );
+
+    return res.json({
+      status: 'ok',
+      message: 'Diagnose gelöscht'
+    });
+  } catch (error) {
+    console.error('delete diagnosis failed', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Fehler beim Löschen der Diagnose'
+    });
+  }
+});
+
+// POST /api/patients/:id/findings - Befund hinzufügen
+router.post('/:id/findings', requireAuth, async (req, res) => {
+  try {
+    const user = (req as AuthenticatedRequestWithUser).authUser;
+    if (!user?.practiceId) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Keine Praxis zugeordnet'
+      });
+    }
+
+    const parsed = addFindingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        status: 'error',
+        errors: parsed.error.flatten().fieldErrors
+      });
+    }
+
+    const patient = await prisma.patient.findFirst({
+      where: {
+        id: req.params.id,
+        practiceId: user.practiceId
+      }
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Patient nicht gefunden'
+      });
+    }
+
+    const findings = (patient.findings as any[]) || [];
+    const newFinding = {
+      id: `finding-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      text: parsed.data.text,
+      created_at: new Date().toISOString(),
+      is_deleted: false,
+      deleted_at: null
+    };
+
+    findings.push(newFinding);
+
+    await prisma.patient.update({
+      where: { id: req.params.id },
+      data: { findings }
+    });
+
+    // Audit-Log erstellen
+    await addAuditLogToPatient(
+      req.params.id,
+      createAuditLog(
+        'add',
+        'finding',
+        newFinding.id,
+        'Befund',
+        `Befund hinzugefügt`,
+        user.shortName || user.displayName
+      )
+    );
+
+    return res.status(201).json({
+      status: 'ok',
+      finding: newFinding
+    });
+  } catch (error) {
+    console.error('add finding failed', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Fehler beim Hinzufügen des Befunds'
+    });
+  }
+});
+
+// PATCH /api/patients/:id/findings/:findingId - Befund bearbeiten
+router.patch('/:id/findings/:findingId', requireAuth, async (req, res) => {
+  try {
+    const user = (req as AuthenticatedRequestWithUser).authUser;
+    if (!user?.practiceId) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Keine Praxis zugeordnet'
+      });
+    }
+
+    const parsed = updateFindingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        status: 'error',
+        errors: parsed.error.flatten().fieldErrors
+      });
+    }
+
+    const patient = await prisma.patient.findFirst({
+      where: {
+        id: req.params.id,
+        practiceId: user.practiceId
+      }
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Patient nicht gefunden'
+      });
+    }
+
+    const findings = (patient.findings as any[]) || [];
+    const findingIndex = findings.findIndex(f => f.id === req.params.findingId);
+
+    if (findingIndex === -1) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Befund nicht gefunden'
+      });
+    }
+
+    const oldFinding = findings[findingIndex];
+    const { reason, ...updateFields } = parsed.data;
+    const changes: Record<string, { old?: string; new?: string }> = {};
+    
+    if (oldFinding.text !== updateFields.text) {
+      changes.text = { old: oldFinding.text, new: updateFields.text };
+    }
+
+    findings[findingIndex] = {
+      ...oldFinding,
+      ...updateFields
+    };
+
+    await prisma.patient.update({
+      where: { id: req.params.id },
+      data: { findings }
+    });
+
+    // Audit-Log erstellen
+    await addAuditLogToPatient(
+      req.params.id,
+      createAuditLog(
+        'update',
+        'finding',
+        oldFinding.id,
+        'Befund',
+        `Befund bearbeitet`,
+        user.shortName || user.displayName,
+        changes,
+        reason
+      )
+    );
+
+    return res.json({
+      status: 'ok',
+      finding: findings[findingIndex]
+    });
+  } catch (error) {
+    console.error('update finding failed', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Fehler beim Bearbeiten des Befunds'
+    });
+  }
+});
+
+// DELETE /api/patients/:id/findings/:findingId - Befund Soft Delete
+router.delete('/:id/findings/:findingId', requireAuth, async (req, res) => {
+  try {
+    const user = (req as AuthenticatedRequestWithUser).authUser;
+    if (!user?.practiceId) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Keine Praxis zugeordnet'
+      });
+    }
+
+    const parsed = deleteFindingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        status: 'error',
+        errors: parsed.error.flatten().fieldErrors
+      });
+    }
+
+    const patient = await prisma.patient.findFirst({
+      where: {
+        id: req.params.id,
+        practiceId: user.practiceId
+      }
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Patient nicht gefunden'
+      });
+    }
+
+    const findings = (patient.findings as any[]) || [];
+    const findingIndex = findings.findIndex(f => f.id === req.params.findingId);
+
+    if (findingIndex === -1) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Befund nicht gefunden'
+      });
+    }
+
+    const finding = findings[findingIndex];
+    findings[findingIndex] = {
+      ...finding,
+      is_deleted: true,
+      deleted_at: new Date().toISOString()
+    };
+
+    await prisma.patient.update({
+      where: { id: req.params.id },
+      data: { findings }
+    });
+
+    // Audit-Log erstellen
+    await addAuditLogToPatient(
+      req.params.id,
+      createAuditLog(
+        'remove',
+        'finding',
+        finding.id,
+        'Befund',
+        `Befund entfernt`,
+        user.shortName || user.displayName,
+        undefined,
+        parsed.data.reason
+      )
+    );
+
+    return res.json({
+      status: 'ok',
+      message: 'Befund gelöscht'
+    });
+  } catch (error) {
+    console.error('delete finding failed', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Fehler beim Löschen des Befunds'
     });
   }
 });

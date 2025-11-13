@@ -58,9 +58,14 @@ const handleShortcutClick = (index: number) => {
   } else if (index === 2) {
     // Shortcut 3: Patientenakte
     setActiveView('patients');
+  } else if (index === 3) {
+    // Shortcut 4: Kalender
+    setActiveView('calendar');
+  } else if (index === 6) {
+    // Shortcut 7: Admin
+    setActiveView('admin');
   } else {
     console.log(`Shortcut ${index + 1} clicked`);
-    // TODO: Implement other shortcuts
   }
 };
 
@@ -175,7 +180,7 @@ watch(
                   type="button"
                   :class="[
                     'flex h-12 w-12 items-center justify-center rounded-full border text-steel-600 transition-all hover:scale-110 hover:shadow-[0_8px_24px_rgba(13,86,132,0.2)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent-sky/25 active:scale-95',
-                    (index === 0 && activeView === 'overview') || (index === 1 && activeView === 'ki-test') || (index === 2 && activeView === 'patients')
+                    (index === 0 && activeView === 'overview') || (index === 1 && activeView === 'ki-test') || (index === 2 && activeView === 'patients') || (index === 3 && activeView === 'calendar') || (index === 6 && activeView === 'admin')
                       ? 'border-accent-sky/80 bg-white/80 shadow-[0_8px_24px_rgba(13,86,132,0.2)]'
                       : 'border-white/65 bg-white/40 hover:border-accent-sky/60 hover:bg-white/70'
                   ]"

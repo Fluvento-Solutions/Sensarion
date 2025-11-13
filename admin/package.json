@@ -1,0 +1,20 @@
+{
+  "name": "sensarion-admin",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "setup.js",
+  "scripts": {
+    "setup": "node setup.js"
+  },
+  "dependencies": {
+    "execa": "^8.0.1",
+    "inquirer": "^9.2.15",
+    "chalk": "^5.3.0",
+    "fs-extra": "^11.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7"
+  }
+}
+

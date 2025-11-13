@@ -22,6 +22,17 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0
 - Kombiniertes `npm run dev`-Skript, das Frontend und Backend parallel startet; zusätzliche Root-Skripte für Prisma (`db:migrate`, `db:generate`, `db:seed`).
 - Login-Formular mit optionaler E-Mail-Merkliste und Dev-Login-Schalter; Auth-Store auf LocalStorage-Basis für persistente Sessions.
 - JWT-basierte Authentifizierung im Backend (`/api/auth/login`, `/api/auth/logout`) inklusive `SESSION_SECRET`-Konfiguration.
+- Diagnosen- und Befundverwaltung für Patienten: JSONB-Felder `diagnoses` und `findings` im Patient-Schema hinzugefügt.
+- API-Endpunkte für Diagnosenverwaltung: `POST /api/patients/:id/diagnoses`, `PATCH /api/patients/:id/diagnoses/:diagnosisId`, `DELETE /api/patients/:id/diagnoses/:diagnosisId` mit vollständiger CRUD-Funktionalität und Audit-Logging.
+- API-Endpunkte für Befundverwaltung: `POST /api/patients/:id/findings`, `PATCH /api/patients/:id/findings/:findingId`, `DELETE /api/patients/:id/findings/:findingId` mit vollständiger CRUD-Funktionalität und Audit-Logging.
+- Frontend-Integration für Diagnosen und Befunde im PatientsModule mit Bearbeitungs- und Löschfunktionen.
+- TypeScript-Typen für `PatientDiagnosis` und `PatientFinding` im API-Service.
+- Setup-System mit `SystemConfig`-Tabelle zur Verwaltung des Installation-Status.
+- Setup-API-Routen: `GET /api/setup/status` und `POST /api/setup/init` für initiale Systemkonfiguration.
+- SetupWizard-Komponente (`SetupWizard.vue`) für schrittweise Systeminitialisierung mit System-Tests, Praxis- und Admin-Erstellung, Whitelabel-Konfiguration und Review.
+- Whitelabel-Funktionalität für Praxen: `logoUrl` und `primaryColor` Felder im Practice-Schema hinzugefügt.
+- Admin-Setup-Tools im `admin/`-Verzeichnis für Systeminitialisierung und Konfiguration.
+- Erweiterte Ollama-Funktionalität mit verbessertem System-Prompt für automatische ICD-Code-Ergänzung bei Diagnosen.
 
 ### Fixed
 

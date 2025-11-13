@@ -11,11 +11,25 @@ model Practice {
   id           String       @id @default(cuid())
   name         String
   code         String       @unique
+  logoUrl      String?
+  primaryColor String?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   teams        PracticeTeam[]
   users        User[]
   patients     Patient[]
+  calendars    Calendar[]
+  rooms        Room[]
+  roomTypes    RoomType[]
+  userTypes    UserType[]
+  settings     PracticeSettings?
+}
+
+model SystemConfig {
+  id                   String   @id @default(cuid())
+  installationComplete Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
 model PracticeTeam {
@@ -71,6 +85,8 @@ model User {
 
   practice Practice        @relation(fields: [practiceId], references: [id], onDelete: Cascade)
   memberships TeamMembership[]
+  ownedCalendars Calendar[]
+  eventParticipants CalendarEventParticipant[]
 
   @@index([practiceId])
 }
@@ -100,11 +116,14 @@ model Patient {
   vitalsHistory Json         @default("[]") // Array von Vitalwerte-Objekten mit Timestamp
   allergies    Json          @default("[]") // [{ substance: string, severity: string, deleted_at?: string, is_deleted?: boolean }]
   medications  Json          @default("[]") // [{ name: string, dose: string, deleted_at?: string, is_deleted?: boolean }]
+  diagnoses    Json          @default("[]") // [{ id: string, text: string, created_at: string, deleted_at?: string, is_deleted?: boolean }]
+  findings     Json          @default("[]") // [{ id: string, text: string, created_at: string, deleted_at?: string, is_deleted?: boolean }]
   auditLogs    Json          @default("[]") // Array von Audit-Log-Objekten
   
   practice  Practice        @relation(fields: [practiceId], references: [id], onDelete: Cascade)
   notes     PatientNote[]
   encounters Encounter[]
+  calendarEvents CalendarEvent[]
 
   @@index([practiceId])
   @@index([practiceId, updatedAt(sort: Desc)])
@@ -133,5 +152,131 @@ model Encounter {
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
   @@index([patientId, date(sort: Desc)])
+}
+
+model Room {
+  id          String    @id @default(cuid())
+  practiceId  String
+  name        String
+  description String?
+  roomTypeId  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  practice Practice @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  roomType RoomType? @relation(fields: [roomTypeId], references: [id], onDelete: SetNull)
+  calendars Calendar[]
+
+  @@unique([practiceId, name])
+  @@index([practiceId])
+}
+
+model RoomType {
+  id          String   @id @default(cuid())
+  practiceId  String
+  name        String
+  description String?
+  color       String?
+  icon        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  practice Practice @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  rooms    Room[]
+
+  @@unique([practiceId, name])
+  @@index([practiceId])
+}
+
+model UserType {
+  id                String   @id @default(cuid())
+  practiceId        String
+  name              String
+  description       String?
+  defaultPermissions Json?   // Array von Permission-Codes
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  practice Practice @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+
+  @@unique([practiceId, name])
+  @@index([practiceId])
+}
+
+model PracticeSettings {
+  id              String   @id @default(cuid())
+  practiceId      String   @unique
+  settings        Json     @default("{}") // Praxis-spezifische Einstellungen
+  adminPasswordHash String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  practice Practice @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+}
+
+model Calendar {
+  id          String    @id @default(cuid())
+  practiceId  String
+  name        String
+  type        CalendarType
+  roomId      String?
+  purpose     String?
+  color       String?
+  ownerId     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  practice Practice @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  room     Room?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  owner    User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  events   CalendarEvent[]
+
+  @@index([practiceId])
+  @@index([ownerId])
+}
+
+enum CalendarType {
+  PERSONAL
+  ROOM
+  PURPOSE
+}
+
+model CalendarEvent {
+  id              String    @id @default(cuid())
+  calendarId      String
+  title           String
+  description     String?   @db.Text
+  startTime       DateTime
+  endTime         DateTime
+  location        String?
+  patientId       String?
+  recurrenceRule  Json?     // { type: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly', endAfter?: number, endDate?: string }
+  recurrenceEndDate DateTime?
+  createdBy       String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  calendar Calendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  patient  Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  participants CalendarEventParticipant[]
+
+  @@index([calendarId])
+  @@index([startTime, endTime])
+  @@index([patientId])
+  @@index([createdBy])
+}
+
+model CalendarEventParticipant {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
 }
 

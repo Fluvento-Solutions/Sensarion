@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 
 import LoginForm from '@/components/auth/LoginForm.vue';
 import AppHeader from '@/components/layout/AppHeader.vue';
@@ -10,9 +10,14 @@ import FooterConsole from '@/components/layout/FooterConsole.vue';
 import OverviewPanel from '@/components/dashboard/OverviewPanel.vue';
 import KiTestModule from '@/components/dashboard/KiTestModule.vue';
 import PatientsModule from '@/components/dashboard/PatientsModule.vue';
-import { devLogin, fetchProfile, login, logout } from '@/services/api';
+import CalendarModule from '@/components/dashboard/CalendarModule.vue';
+import AdminModule from '@/components/dashboard/AdminModule.vue';
+import SetupWizard from '@/components/admin/SetupWizard.vue';
+import { devLogin, fetchProfile, login, logout, getSetupStatus } from '@/services/api';
 import { useAuthStore } from '@/composables/useAuthStore';
 import { useViewState } from '@/composables/useViewState';
+
+const { setActiveView } = useViewState();
 
 const auth = useAuthStore();
 const { activeView } = useViewState();
@@ -20,6 +25,8 @@ const { activeView } = useViewState();
 const loadingProfile = ref(false);
 const profileError = ref<string | null>(null);
 const rememberedEmail = ref<string | null>(localStorage.getItem('sensarion-last-email'));
+const showSetup = ref(false);
+const checkingSetup = ref(true);
 
 const currentUser = computed(() => auth.state.user);
 const token = computed(() => auth.state.token);
@@ -84,15 +91,49 @@ const handleLogout = async () => {
   auth.clearSession();
 };
 
+const handleKeyDown = (event: KeyboardEvent) => {
+  // Shortcut "7" für Admin
+  if (event.key === '7' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+    const target = event.target as HTMLElement;
+    // Ignoriere wenn in einem Input-Feld
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      return;
+    }
+    if (isAuthenticated.value) {
+      setActiveView('admin');
+    }
+  }
+};
+
 onMounted(async () => {
-  if (token.value && currentUser.value) {
+  // Keyboard-Shortcut-Listener hinzufügen
+  window.addEventListener('keydown', handleKeyDown);
+
+  // Prüfe Setup-Status
+  try {
+    const status = await getSetupStatus();
+    showSetup.value = !status.installationComplete;
+  } catch (error) {
+    // Wenn Setup-API nicht erreichbar, gehe von abgeschlossener Installation aus
+    showSetup.value = false;
+  } finally {
+    checkingSetup.value = false;
+  }
+
+  if (token.value && currentUser.value && !showSetup.value) {
     await loadProfile();
   }
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown);
 });
 </script>
 
 <template>
-  <div v-if="!isAuthenticated" class="auth-surface">
+  <SetupWizard v-if="!checkingSetup && showSetup" />
+
+  <div v-else-if="!isAuthenticated" class="auth-surface">
     <div class="glass-card mx-auto w-full max-w-lg">
       <LoginForm
         :loading="loadingProfile"
@@ -129,6 +170,8 @@ onMounted(async () => {
       </div>
       <KiTestModule v-else-if="activeView === 'ki-test'" />
       <PatientsModule v-else-if="activeView === 'patients'" />
+      <CalendarModule v-else-if="activeView === 'calendar'" />
+      <AdminModule v-else-if="activeView === 'admin'" />
       <OverviewPanel v-else />
     </template>
 

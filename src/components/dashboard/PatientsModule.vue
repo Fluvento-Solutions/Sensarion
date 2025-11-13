@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch, onUnmounted } from 'vue';
-import { PhMagnifyingGlass, PhList, PhUser, PhPlus, PhActivity, PhShield, PhStethoscope, PhFileText, PhCalendar, PhLock, PhGenderMale, PhGenderFemale, PhGenderIntersex, PhCaretRight, PhPencil, PhTrash, PhX, PhTabs, PhAddressBook, PhChartLine, PhFunnel, PhFunnelSimple, PhArrowsDownUp, PhCheckCircle, PhXCircle, PhPencilSimple, PhTrashSimple, PhSparkle, PhShieldCheck } from '@phosphor-icons/vue';
+import { PhMagnifyingGlass, PhList, PhUser, PhPlus, PhActivity, PhShield, PhStethoscope, PhFileText, PhCalendar, PhLock, PhGenderMale, PhGenderFemale, PhGenderIntersex, PhCaretRight, PhPencil, PhTrash, PhX, PhTabs, PhAddressBook, PhChartLine, PhFunnel, PhFunnelSimple, PhArrowsDownUp, PhCheckCircle, PhXCircle, PhPencilSimple, PhTrashSimple, PhSparkle, PhShieldCheck, PhEye, PhCheck } from '@phosphor-icons/vue';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -10,19 +10,24 @@ import {
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
+  TimeScale
 } from 'chart.js';
+import zoomPlugin from 'chartjs-plugin-zoom';
+import 'chartjs-adapter-date-fns';
 import { Line } from 'vue-chartjs';
 
 ChartJS.register(
   CategoryScale,
   LinearScale,
+  TimeScale,
   PointElement,
   LineElement,
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
+  zoomPlugin
 );
 import {
   getPatients,
@@ -43,12 +48,23 @@ import {
   deletePatientMedication,
   updatePatientVital,
   getPatientAuditLogs,
+  improveTextWithAI,
+  reviewPatientWithAI,
+  addPatientDiagnosis,
+  updatePatientDiagnosis,
+  deletePatientDiagnosis,
+  addPatientFinding,
+  updatePatientFinding,
+  deletePatientFinding,
   type Patient,
   type PatientNote,
   type PatientEncounter,
   type PatientVitalHistory,
-  type PatientAuditLog
+  type PatientAuditLog,
+  type PatientDiagnosis,
+  type PatientFinding
 } from '@/services/api';
+import PatientWizard from '@/components/patient/PatientWizard.vue';
 
 const searchQuery = ref('');
 const patients = ref<Patient[]>([]);
@@ -64,7 +80,7 @@ const historySortBy = ref<'date-asc' | 'date-desc'>('date-desc');
 const error = ref<string | null>(null);
 const showNoteModal = ref(false);
 const newNoteText = ref('');
-const showNewPatientModal = ref(false);
+const showPatientWizard = ref(false);
 const showEditPatientModal = ref(false);
 const showVitalModal = ref(false);
 const showEditVitalModal = ref(false);
@@ -72,9 +88,36 @@ const showAllergyModal = ref(false);
 const showEditAllergyModal = ref(false);
 const showMedicationModal = ref(false);
 const showEditMedicationModal = ref(false);
+const showPmhModal = ref(false);
+const showDiagnosisModal = ref(false);
+const showEditDiagnosisModal = ref(false);
+const showFindingModal = ref(false);
+const showEditFindingModal = ref(false);
+const showDeleteVitalModal = ref(false);
+const showDeleteAllergyModal = ref(false);
+const showDeleteMedicationModal = ref(false);
+const showDeleteDiagnosisModal = ref(false);
+const showDeleteFindingModal = ref(false);
+const deletingVitalId = ref<string | null>(null);
+const deletingAllergyId = ref<string | null>(null);
+const deletingMedicationId = ref<string | null>(null);
+const deletingDiagnosisId = ref<string | null>(null);
+const deletingFindingId = ref<string | null>(null);
+const deleteReason = ref('');
 const editingVitalId = ref<string | null>(null);
 const editingAllergyId = ref<string | null>(null);
 const editingMedicationId = ref<string | null>(null);
+const editingDiagnosisId = ref<string | null>(null);
+const editingFindingId = ref<string | null>(null);
+const updateReason = ref('');
+const isImprovingText = ref(false);
+const isImprovingDiagnosis = ref(false);
+const isImprovingFinding = ref(false);
+const isReviewingPatient = ref(false);
+const patientReviewResult = ref<string>('');
+const showReviewModal = ref(false);
+const mainDiagnosis = ref<string>('');
+const isEditingMainDiagnosis = ref(false);
 const isSidebarCollapsed = ref(false);
 const newPatientForm = ref({
   givenNames: '',
@@ -112,11 +155,57 @@ const newVitalForm = ref({
   temperature: undefined as number | undefined,
   spo2: undefined as number | undefined,
   glucose: undefined as number | undefined,
-  bmi: undefined as number | undefined
+  weight: undefined as number | undefined,
+  height: undefined as number | undefined,
+  pain_scale: undefined as number | undefined
+});
+
+const pmhForm = ref({
+  q1: undefined as number | undefined,
+  q2: undefined as number | undefined,
+  q3: undefined as number | undefined,
+  q4: undefined as number | undefined,
+  q5: undefined as number | undefined,
+  q6: undefined as number | undefined,
+  q7: undefined as number | undefined,
+  q8: undefined as number | undefined,
+  q9: undefined as number | undefined
+});
+
+const pmhQuestions = [
+  'Ich bin oft unbeschwert und gut aufgelegt.',
+  'Ich genieße mein Leben.',
+  'Alles in allem bin ich zufrieden mit meinem Leben.',
+  'Im Allgemeinen bin ich zuversichtlich.',
+  'Es gelingt mir gut, meine Bedürfnisse zu erfüllen.',
+  'Ich bin in guter körperlicher und seelischer Verfassung.',
+  'Ich fühle mich dem Leben und seinen Schwierigkeiten eigentlich gut gewachsen.',
+  'Vieles, was ich tue, macht mir Freude.',
+  'Ich bin ein ruhiger, ausgeglichener Mensch.'
+];
+
+const pmhTotal = computed(() => {
+  const responses = [
+    pmhForm.value.q1, pmhForm.value.q2, pmhForm.value.q3,
+    pmhForm.value.q4, pmhForm.value.q5, pmhForm.value.q6,
+    pmhForm.value.q7, pmhForm.value.q8, pmhForm.value.q9
+  ].filter(v => v !== undefined) as number[];
+  
+  if (responses.length === 9) {
+    return responses.reduce((sum, val) => sum + val, 0);
+  }
+  return '–';
 });
 const newAllergyForm = ref({
   substance: '',
-  severity: ''
+  severity: '' as 'leicht' | 'mittel' | 'schwer' | '',
+  notes: ''
+});
+const newDiagnosisForm = ref({
+  text: ''
+});
+const newFindingForm = ref({
+  text: ''
 });
 const newMedicationForm = ref({
   name: '',
@@ -141,6 +230,20 @@ const activeMedications = computed(() => {
   if (!selectedPatient.value) return [];
   return (selectedPatient.value.medications || []).filter(
     (m: any) => !m.is_deleted && !m.deleted_at
+  );
+});
+
+const activeDiagnoses = computed(() => {
+  if (!selectedPatient.value) return [];
+  return (selectedPatient.value.diagnoses || []).filter(
+    (d: any) => !d.is_deleted && !d.deleted_at
+  );
+});
+
+const activeFindings = computed(() => {
+  if (!selectedPatient.value) return [];
+  return (selectedPatient.value.findings || []).filter(
+    (f: any) => !f.is_deleted && !f.deleted_at
   );
 });
 
@@ -300,17 +403,11 @@ const chartData = computed(() => {
     new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime()
   );
 
-  const labels = sortedVitals.map(v => {
-    const date = new Date(v.recordedAt);
-    return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-  });
-
   return {
-    labels,
     datasets: [
       {
         label: 'RR Systolisch',
-        data: sortedVitals.map(v => v.bp_systolic || null),
+        data: sortedVitals.map(v => ({ x: new Date(v.recordedAt).getTime(), y: v.bp_systolic || null })),
         borderColor: 'rgb(239, 68, 68)',
         backgroundColor: 'rgba(239, 68, 68, 0.1)',
         tension: 0.4,
@@ -319,7 +416,7 @@ const chartData = computed(() => {
       },
       {
         label: 'RR Diastolisch',
-        data: sortedVitals.map(v => v.bp_diastolic || null),
+        data: sortedVitals.map(v => ({ x: new Date(v.recordedAt).getTime(), y: v.bp_diastolic || null })),
         borderColor: 'rgb(239, 68, 68)',
         backgroundColor: 'rgba(239, 68, 68, 0.1)',
         borderDash: [5, 5],
@@ -329,7 +426,7 @@ const chartData = computed(() => {
       },
       {
         label: 'Puls (bpm)',
-        data: sortedVitals.map(v => v.hr || null),
+        data: sortedVitals.map(v => ({ x: new Date(v.recordedAt).getTime(), y: v.hr || null })),
         borderColor: 'rgb(59, 130, 246)',
         backgroundColor: 'rgba(59, 130, 246, 0.1)',
         tension: 0.4,
@@ -338,7 +435,7 @@ const chartData = computed(() => {
       },
       {
         label: 'Temperatur (°C)',
-        data: sortedVitals.map(v => v.temperature || null),
+        data: sortedVitals.map(v => ({ x: new Date(v.recordedAt).getTime(), y: v.temperature || null })),
         borderColor: 'rgb(251, 146, 60)',
         backgroundColor: 'rgba(251, 146, 60, 0.1)',
         tension: 0.4,
@@ -347,7 +444,7 @@ const chartData = computed(() => {
       },
       {
         label: 'SpO2 (%)',
-        data: sortedVitals.map(v => v.spo2 || null),
+        data: sortedVitals.map(v => ({ x: new Date(v.recordedAt).getTime(), y: v.spo2 || null })),
         borderColor: 'rgb(34, 197, 94)',
         backgroundColor: 'rgba(34, 197, 94, 0.1)',
         tension: 0.4,
@@ -356,12 +453,30 @@ const chartData = computed(() => {
       },
       {
         label: 'Zucker (mg/dl)',
-        data: sortedVitals.map(v => v.glucose || null),
+        data: sortedVitals.map(v => ({ x: new Date(v.recordedAt).getTime(), y: v.glucose || null })),
         borderColor: 'rgb(168, 85, 247)',
         backgroundColor: 'rgba(168, 85, 247, 0.1)',
         tension: 0.4,
         fill: false,
         yAxisID: 'y4'
+      },
+      {
+        label: 'Schmerzskala (1-10)',
+        data: sortedVitals.map(v => ({ x: new Date(v.recordedAt).getTime(), y: v.pain_scale || null })),
+        borderColor: 'rgb(236, 72, 153)',
+        backgroundColor: 'rgba(236, 72, 153, 0.1)',
+        tension: 0.4,
+        fill: false,
+        yAxisID: 'y5'
+      },
+      {
+        label: 'PMH (0-27)',
+        data: sortedVitals.map(v => ({ x: new Date(v.recordedAt).getTime(), y: v.pmh_total || null })),
+        borderColor: 'rgb(14, 165, 233)',
+        backgroundColor: 'rgba(14, 165, 233, 0.1)',
+        tension: 0.4,
+        fill: false,
+        yAxisID: 'y6'
       }
     ]
   };
@@ -393,10 +508,33 @@ const chartOptions = computed(() => ({
       borderWidth: 1,
       padding: 12,
       displayColors: true
+    },
+    zoom: {
+      zoom: {
+        wheel: {
+          enabled: true
+        },
+        pinch: {
+          enabled: true
+        },
+        mode: 'x' as const
+      },
+      pan: {
+        enabled: true,
+        mode: 'x' as const
+      }
     }
   },
   scales: {
     x: {
+      type: 'time' as const,
+      time: {
+        unit: 'day' as const,
+        displayFormats: {
+          day: 'dd.MM.yyyy',
+          hour: 'dd.MM HH:mm'
+        }
+      },
       grid: {
         color: 'rgba(226, 232, 240, 0.3)'
       },
@@ -462,6 +600,54 @@ const chartOptions = computed(() => ({
     y4: {
       type: 'linear' as const,
       display: false
+    },
+    y5: {
+      type: 'linear' as const,
+      display: true,
+      position: 'right' as const,
+      title: {
+        display: true,
+        text: 'Schmerz (1-10)',
+        color: 'rgb(148, 163, 184)',
+        font: {
+          size: 11
+        }
+      },
+      grid: {
+        drawOnChartArea: false
+      },
+      ticks: {
+        color: 'rgb(148, 163, 184)',
+        font: {
+          size: 10
+        },
+        min: 0,
+        max: 10
+      }
+    },
+    y6: {
+      type: 'linear' as const,
+      display: true,
+      position: 'right' as const,
+      title: {
+        display: true,
+        text: 'PMH (0-27)',
+        color: 'rgb(148, 163, 184)',
+        font: {
+          size: 11
+        }
+      },
+      grid: {
+        drawOnChartArea: false
+      },
+      ticks: {
+        color: 'rgb(148, 163, 184)',
+        font: {
+          size: 10
+        },
+        min: 0,
+        max: 27
+      }
     }
   },
   interaction: {
@@ -532,6 +718,154 @@ const selectPatient = async (id: string) => {
   }
 };
 
+const handleImproveText = async () => {
+  if (!newNoteText.value.trim() || isImprovingText.value) return;
+
+  isImprovingText.value = true;
+  error.value = null;
+  const originalText = newNoteText.value;
+  
+  try {
+    // Starte mit leerem Text, wird während des Streamings aufgebaut
+    newNoteText.value = '';
+    
+    await improveTextWithAI(originalText, undefined, (chunk: string) => {
+      // Füge jeden Chunk zum Text hinzu
+      newNoteText.value += chunk;
+    });
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Fehler beim Verbessern des Textes';
+    // Bei Fehler: Originaltext wiederherstellen
+    newNoteText.value = originalText;
+  } finally {
+    isImprovingText.value = false;
+  }
+};
+
+const handleImproveDiagnosis = async () => {
+  if (!newDiagnosisForm.value.text.trim() || isImprovingDiagnosis.value) return;
+
+  isImprovingDiagnosis.value = true;
+  error.value = null;
+  const originalText = newDiagnosisForm.value.text;
+  
+  try {
+    // Starte mit leerem Text, wird während des Streamings aufgebaut
+    newDiagnosisForm.value.text = '';
+    
+    await improveTextWithAI(
+      originalText,
+      'Du bist eine medizinische Schreibkraft. Formatiere die Diagnose im Format: "[ICD-10-Code] - [Fachbegriff der Diagnose] ([Bemerkung])". Beispiel: "I10 - Essentielle Hypertonie (primär)". Antworte NUR mit der formatierten Diagnose, keine zusätzlichen Erklärungen.',
+      (chunk: string) => {
+        // Füge jeden Chunk zum Text hinzu
+        newDiagnosisForm.value.text += chunk;
+      }
+    );
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Fehler beim Verbessern der Diagnose';
+    // Bei Fehler: Originaltext wiederherstellen
+    newDiagnosisForm.value.text = originalText;
+  } finally {
+    isImprovingDiagnosis.value = false;
+  }
+};
+
+const handleImproveFinding = async () => {
+  if (!newFindingForm.value.text.trim() || isImprovingFinding.value) return;
+
+  isImprovingFinding.value = true;
+  error.value = null;
+  const originalText = newFindingForm.value.text;
+  
+  try {
+    // Starte mit leerem Text, wird während des Streamings aufgebaut
+    newFindingForm.value.text = '';
+    
+    await improveTextWithAI(
+      originalText,
+      'Du bist eine medizinische Schreibkraft. Formatiere den Befund fachlich korrekt, professionell und in sauberem Stil. Verwende medizinische Fachbegriffe korrekt. Antworte NUR mit dem formatierten Befund, keine zusätzlichen Erklärungen.',
+      (chunk: string) => {
+        // Füge jeden Chunk zum Text hinzu
+        newFindingForm.value.text += chunk;
+      }
+    );
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Fehler beim Verbessern des Befunds';
+    // Bei Fehler: Originaltext wiederherstellen
+    newFindingForm.value.text = originalText;
+  } finally {
+    isImprovingFinding.value = false;
+  }
+};
+
+const hasReviewResult = computed(() => patientReviewResult.value.length > 0);
+
+// Extrahiere Hauptdiagnose aus KI-Review-Resultat
+const extractMainDiagnosis = (reviewText: string): string => {
+  if (!reviewText) return '';
+  
+  // Suche nach Mustern wie "Hauptdiagnose:", "Diagnose:", "ICD-10:", etc.
+  const patterns = [
+    /(?:Hauptdiagnose|Diagnose|ICD-10)[:\s]+([A-Z]\d{2}(?:\.\d+)?(?:\s*-\s*[^(\n]+)?)/i,
+    /([A-Z]\d{2}(?:\.\d+)?)\s*-\s*([^(\n]+)/,
+    /Hauptdiagnose[:\s]+([^\n]+)/i
+  ];
+  
+  for (const pattern of patterns) {
+    const match = reviewText.match(pattern);
+    if (match && match[1]) {
+      // Wenn Format "ICD-10 - Fachbegriff" gefunden
+      if (match[2]) {
+        return `${match[1]} - ${match[2].trim()}`;
+      }
+      return match[1].trim();
+    }
+  }
+  
+  // Fallback: Suche nach erstem ICD-10 Code im Text
+  const icdMatch = reviewText.match(/([A-Z]\d{2}(?:\.\d+)?)/);
+  if (icdMatch) {
+    return icdMatch[1];
+  }
+  
+  return '';
+};
+
+const handleReviewPatient = async () => {
+  if (!selectedPatientId.value) return;
+
+  // Starte neue Überprüfung
+  if (isReviewingPatient.value) return;
+
+  isReviewingPatient.value = true;
+  error.value = null;
+  patientReviewResult.value = '';
+  mainDiagnosis.value = '';
+  
+  try {
+    await reviewPatientWithAI(selectedPatientId.value, (chunk: string) => {
+      // Füge jeden Chunk zum Resultat hinzu
+      patientReviewResult.value += chunk;
+    });
+    
+    // Extrahiere Hauptdiagnose aus dem vollständigen Resultat
+    mainDiagnosis.value = extractMainDiagnosis(patientReviewResult.value);
+    
+    // Modal automatisch öffnen nach Abschluss
+    showReviewModal.value = true;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Fehler bei der KI-Überprüfung';
+  } finally {
+    isReviewingPatient.value = false;
+  }
+};
+
+const handleViewReview = () => {
+  if (hasReviewResult.value) {
+    showReviewModal.value = true;
+  }
+};
+
 const handleSaveNote = async () => {
   if (!selectedPatientId.value || !newNoteText.value.trim()) return;
   
@@ -549,53 +883,17 @@ const handleSaveNote = async () => {
   }
 };
 
-const handleCreatePatient = async () => {
-  if (!newPatientForm.value.givenNames.trim() || !newPatientForm.value.familyName.trim() || !newPatientForm.value.birthDate) {
-    error.value = 'Bitte füllen Sie alle Pflichtfelder aus';
-    return;
+const handleWizardSuccess = async (patientId: string) => {
+  showPatientWizard.value = false;
+  // Reload patients and select new one
+  await loadPatients();
+  if (patientId) {
+    await selectPatient(patientId);
   }
+};
 
-  isLoading.value = true;
-  error.value = null;
-  try {
-    const givenNamesArray = newPatientForm.value.givenNames
-      .split(',')
-      .map(n => n.trim())
-      .filter(n => n.length > 0);
-
-    const tagsArray = newPatientForm.value.tags
-      .split(',')
-      .map(t => t.trim())
-      .filter(t => t.length > 0);
-
-    const newPatient = await createPatient({
-      name: {
-        given: givenNamesArray,
-        family: newPatientForm.value.familyName.trim()
-      },
-      birthDate: newPatientForm.value.birthDate,
-      tags: tagsArray
-    });
-
-    // Reset form
-    newPatientForm.value = {
-      givenNames: '',
-      familyName: '',
-      birthDate: '',
-      tags: ''
-    };
-    showNewPatientModal.value = false;
-
-    // Reload patients and select new one
-    await loadPatients();
-    if (newPatient.patient_id) {
-      await selectPatient(newPatient.patient_id);
-    }
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Fehler beim Erstellen des Patienten';
-  } finally {
-    isLoading.value = false;
-  }
+const handleWizardClose = () => {
+  showPatientWizard.value = false;
 };
 
 const openEditPatientModal = () => {
@@ -680,6 +978,24 @@ const handleCreateVital = async () => {
   isLoading.value = true;
   error.value = null;
   try {
+    // Berechne PMH-Gesamtwert falls PMH-Daten vorhanden
+    const pmhResponses = [
+      pmhForm.value.q1, pmhForm.value.q2, pmhForm.value.q3,
+      pmhForm.value.q4, pmhForm.value.q5, pmhForm.value.q6,
+      pmhForm.value.q7, pmhForm.value.q8, pmhForm.value.q9
+    ].filter(v => v !== undefined) as number[];
+    
+    const pmhTotal = pmhResponses.length === 9 ? pmhResponses.reduce((sum, val) => sum + val, 0) : undefined;
+    const pmhData = pmhResponses.length === 9 ? {
+      pmh_responses: pmhResponses,
+      pmh_total: pmhTotal
+    } : {};
+
+    // Berechne BMI falls Gewicht und Körpergröße vorhanden
+    const bmi = newVitalForm.value.weight && newVitalForm.value.height
+      ? newVitalForm.value.weight / Math.pow(newVitalForm.value.height / 100, 2)
+      : undefined;
+
     await createPatientVital(selectedPatientId.value, {
       bp_systolic: newVitalForm.value.bp_systolic,
       bp_diastolic: newVitalForm.value.bp_diastolic,
@@ -687,7 +1003,11 @@ const handleCreateVital = async () => {
       temperature: newVitalForm.value.temperature,
       spo2: newVitalForm.value.spo2,
       glucose: newVitalForm.value.glucose,
-      bmi: newVitalForm.value.bmi
+      weight: newVitalForm.value.weight,
+      height: newVitalForm.value.height,
+      bmi: bmi,
+      pain_scale: newVitalForm.value.pain_scale,
+      ...pmhData
     });
 
     newVitalForm.value = {
@@ -697,9 +1017,23 @@ const handleCreateVital = async () => {
       temperature: undefined,
       spo2: undefined,
       glucose: undefined,
-      bmi: undefined
+      weight: undefined,
+      height: undefined,
+      pain_scale: undefined
+    };
+    pmhForm.value = {
+      q1: undefined,
+      q2: undefined,
+      q3: undefined,
+      q4: undefined,
+      q5: undefined,
+      q6: undefined,
+      q7: undefined,
+      q8: undefined,
+      q9: undefined
     };
     showVitalModal.value = false;
+    showPmhModal.value = false;
     await selectPatient(selectedPatientId.value);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Fehler beim Erstellen der Vitalwerte';
@@ -717,7 +1051,9 @@ const openEditVitalModal = (vital: PatientVitalHistory) => {
     temperature: vital.temperature,
     spo2: vital.spo2,
     glucose: vital.glucose,
-    bmi: vital.bmi
+    weight: (vital as any).weight,
+    height: (vital as any).height,
+    pain_scale: vital.pain_scale
   };
   showEditVitalModal.value = true;
 };
@@ -728,6 +1064,16 @@ const handleUpdateVital = async () => {
   isLoading.value = true;
   error.value = null;
   try {
+    // Berechne BMI falls Gewicht und Körpergröße vorhanden
+    const bmi = newVitalForm.value.weight && newVitalForm.value.height
+      ? newVitalForm.value.weight / Math.pow(newVitalForm.value.height / 100, 2)
+      : undefined;
+
+    if (!updateReason.value.trim()) {
+      error.value = 'Bitte geben Sie einen Grund für die Änderung an';
+      return;
+    }
+
     await updatePatientVital(selectedPatientId.value, editingVitalId.value, {
       bp_systolic: newVitalForm.value.bp_systolic,
       bp_diastolic: newVitalForm.value.bp_diastolic,
@@ -735,7 +1081,11 @@ const handleUpdateVital = async () => {
       temperature: newVitalForm.value.temperature,
       spo2: newVitalForm.value.spo2,
       glucose: newVitalForm.value.glucose,
-      bmi: newVitalForm.value.bmi
+      weight: newVitalForm.value.weight,
+      height: newVitalForm.value.height,
+      bmi: bmi,
+      pain_scale: newVitalForm.value.pain_scale,
+      reason: updateReason.value.trim()
     });
 
     newVitalForm.value = {
@@ -745,8 +1095,11 @@ const handleUpdateVital = async () => {
       temperature: undefined,
       spo2: undefined,
       glucose: undefined,
-      bmi: undefined
+      weight: undefined,
+      height: undefined,
+      pain_scale: undefined
     };
+    updateReason.value = '';
     editingVitalId.value = null;
     showEditVitalModal.value = false;
     await selectPatient(selectedPatientId.value);
@@ -757,14 +1110,25 @@ const handleUpdateVital = async () => {
   }
 };
 
-const handleDeleteVital = async (vitalId: string) => {
-  if (!selectedPatientId.value) return;
-  if (!confirm('Möchten Sie diese Vitalwerte wirklich löschen?')) return;
+const openDeleteVitalModal = (vitalId: string) => {
+  deletingVitalId.value = vitalId;
+  deleteReason.value = '';
+  showDeleteVitalModal.value = true;
+};
+
+const handleDeleteVital = async () => {
+  if (!selectedPatientId.value || !deletingVitalId.value || !deleteReason.value.trim()) {
+    error.value = 'Bitte geben Sie einen Grund für die Löschung an';
+    return;
+  }
 
   isLoading.value = true;
   error.value = null;
   try {
-    await deletePatientVital(selectedPatientId.value, vitalId);
+    await deletePatientVital(selectedPatientId.value, deletingVitalId.value, deleteReason.value.trim());
+    deletingVitalId.value = null;
+    deleteReason.value = '';
+    showDeleteVitalModal.value = false;
     await selectPatient(selectedPatientId.value);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Fehler beim Löschen der Vitalwerte';
@@ -777,7 +1141,8 @@ const openEditAllergyModal = (allergy: any) => {
   editingAllergyId.value = allergy.id;
   newAllergyForm.value = {
     substance: allergy.substance,
-    severity: allergy.severity
+    severity: allergy.severity || '',
+    notes: allergy.notes || ''
   };
   showEditAllergyModal.value = true;
 };
@@ -793,10 +1158,11 @@ const handleAddAllergy = async () => {
   try {
     await addPatientAllergy(selectedPatientId.value, {
       substance: newAllergyForm.value.substance.trim(),
-      severity: newAllergyForm.value.severity.trim()
+      severity: newAllergyForm.value.severity.trim(),
+      notes: newAllergyForm.value.notes.trim() || undefined
     });
 
-    newAllergyForm.value = { substance: '', severity: '' };
+    newAllergyForm.value = { substance: '', severity: '', notes: '' };
     showAllergyModal.value = false;
     await selectPatient(selectedPatientId.value);
   } catch (err) {
@@ -811,16 +1177,23 @@ const handleUpdateAllergy = async () => {
     error.value = 'Bitte füllen Sie alle Felder aus';
     return;
   }
+  if (!updateReason.value.trim()) {
+    error.value = 'Bitte geben Sie einen Grund für die Änderung an';
+    return;
+  }
 
   isLoading.value = true;
   error.value = null;
   try {
     await updatePatientAllergy(selectedPatientId.value, editingAllergyId.value, {
       substance: newAllergyForm.value.substance.trim(),
-      severity: newAllergyForm.value.severity.trim()
+      severity: newAllergyForm.value.severity.trim(),
+      notes: newAllergyForm.value.notes.trim() || undefined,
+      reason: updateReason.value.trim()
     });
 
-    newAllergyForm.value = { substance: '', severity: '' };
+    newAllergyForm.value = { substance: '', severity: '', notes: '' };
+    updateReason.value = '';
     editingAllergyId.value = null;
     showEditAllergyModal.value = false;
     await selectPatient(selectedPatientId.value);
@@ -831,14 +1204,25 @@ const handleUpdateAllergy = async () => {
   }
 };
 
-const handleDeleteAllergy = async (allergyId: string) => {
-  if (!selectedPatientId.value) return;
-  if (!confirm('Möchten Sie diese Allergie wirklich löschen?')) return;
+const openDeleteAllergyModal = (allergyId: string) => {
+  deletingAllergyId.value = allergyId;
+  deleteReason.value = '';
+  showDeleteAllergyModal.value = true;
+};
+
+const handleDeleteAllergy = async () => {
+  if (!selectedPatientId.value || !deletingAllergyId.value || !deleteReason.value.trim()) {
+    error.value = 'Bitte geben Sie einen Grund für die Löschung an';
+    return;
+  }
 
   isLoading.value = true;
   error.value = null;
   try {
-    await deletePatientAllergy(selectedPatientId.value, allergyId);
+    await deletePatientAllergy(selectedPatientId.value, deletingAllergyId.value, deleteReason.value.trim());
+    deletingAllergyId.value = null;
+    deleteReason.value = '';
+    showDeleteAllergyModal.value = false;
     await selectPatient(selectedPatientId.value);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Fehler beim Löschen der Allergie';
@@ -914,6 +1298,10 @@ const handleUpdateMedication = async () => {
     error.value = 'Bitte geben Sie mindestens eine Dosierung an';
     return;
   }
+  if (!updateReason.value.trim()) {
+    error.value = 'Bitte geben Sie einen Grund für die Änderung an';
+    return;
+  }
 
   isLoading.value = true;
   error.value = null;
@@ -924,7 +1312,8 @@ const handleUpdateMedication = async () => {
       dose_midday: newMedicationForm.value.dose_midday.trim() || undefined,
       dose_evening: newMedicationForm.value.dose_evening.trim() || undefined,
       dose_night: newMedicationForm.value.dose_night.trim() || undefined,
-      notes: newMedicationForm.value.notes.trim() || undefined
+      notes: newMedicationForm.value.notes.trim() || undefined,
+      reason: updateReason.value.trim()
     });
 
     newMedicationForm.value = { 
@@ -935,6 +1324,7 @@ const handleUpdateMedication = async () => {
       dose_night: '',
       notes: ''
     };
+    updateReason.value = '';
     editingMedicationId.value = null;
     showEditMedicationModal.value = false;
     await selectPatient(selectedPatientId.value);
@@ -945,17 +1335,204 @@ const handleUpdateMedication = async () => {
   }
 };
 
-const handleDeleteMedication = async (medicationId: string) => {
-  if (!selectedPatientId.value) return;
-  if (!confirm('Möchten Sie diese Medikation wirklich löschen?')) return;
+const openDeleteMedicationModal = (medicationId: string) => {
+  deletingMedicationId.value = medicationId;
+  deleteReason.value = '';
+  showDeleteMedicationModal.value = true;
+};
+
+const handleDeleteMedication = async () => {
+  if (!selectedPatientId.value || !deletingMedicationId.value || !deleteReason.value.trim()) {
+    error.value = 'Bitte geben Sie einen Grund für die Löschung an';
+    return;
+  }
 
   isLoading.value = true;
   error.value = null;
   try {
-    await deletePatientMedication(selectedPatientId.value, medicationId);
+    await deletePatientMedication(selectedPatientId.value, deletingMedicationId.value, deleteReason.value.trim());
+    deletingMedicationId.value = null;
+    deleteReason.value = '';
+    showDeleteMedicationModal.value = false;
     await selectPatient(selectedPatientId.value);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Fehler beim Löschen der Medikation';
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const handleAddDiagnosis = async () => {
+  if (!selectedPatientId.value || !newDiagnosisForm.value.text.trim()) {
+    error.value = 'Bitte geben Sie eine Diagnose ein';
+    return;
+  }
+
+  isLoading.value = true;
+  error.value = null;
+  try {
+    await addPatientDiagnosis(selectedPatientId.value, {
+      text: newDiagnosisForm.value.text.trim()
+    });
+
+    newDiagnosisForm.value = { text: '' };
+    showDiagnosisModal.value = false;
+    await selectPatient(selectedPatientId.value);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Fehler beim Hinzufügen der Diagnose';
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const openEditDiagnosisModal = (diagnosis: PatientDiagnosis) => {
+  editingDiagnosisId.value = diagnosis.id || null;
+  newDiagnosisForm.value = {
+    text: diagnosis.text
+  };
+  showEditDiagnosisModal.value = true;
+};
+
+const handleUpdateDiagnosis = async () => {
+  if (!selectedPatientId.value || !editingDiagnosisId.value || !newDiagnosisForm.value.text.trim()) {
+    error.value = 'Bitte geben Sie eine Diagnose ein';
+    return;
+  }
+  if (!updateReason.value.trim()) {
+    error.value = 'Bitte geben Sie einen Grund für die Änderung an';
+    return;
+  }
+
+  isLoading.value = true;
+  error.value = null;
+  try {
+    await updatePatientDiagnosis(selectedPatientId.value, editingDiagnosisId.value, {
+      text: newDiagnosisForm.value.text.trim(),
+      reason: updateReason.value.trim()
+    });
+
+    newDiagnosisForm.value = { text: '' };
+    updateReason.value = '';
+    editingDiagnosisId.value = null;
+    showEditDiagnosisModal.value = false;
+    await selectPatient(selectedPatientId.value);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Fehler beim Bearbeiten der Diagnose';
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const openDeleteDiagnosisModal = (diagnosisId: string) => {
+  deletingDiagnosisId.value = diagnosisId;
+  deleteReason.value = '';
+  showDeleteDiagnosisModal.value = true;
+};
+
+const handleDeleteDiagnosis = async () => {
+  if (!selectedPatientId.value || !deletingDiagnosisId.value || !deleteReason.value.trim()) {
+    error.value = 'Bitte geben Sie einen Grund für die Löschung an';
+    return;
+  }
+
+  isLoading.value = true;
+  error.value = null;
+  try {
+    await deletePatientDiagnosis(selectedPatientId.value, deletingDiagnosisId.value, deleteReason.value.trim());
+    deletingDiagnosisId.value = null;
+    deleteReason.value = '';
+    showDeleteDiagnosisModal.value = false;
+    await selectPatient(selectedPatientId.value);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Fehler beim Löschen der Diagnose';
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const handleAddFinding = async () => {
+  if (!selectedPatientId.value || !newFindingForm.value.text.trim()) {
+    error.value = 'Bitte geben Sie einen Befund ein';
+    return;
+  }
+
+  isLoading.value = true;
+  error.value = null;
+  try {
+    await addPatientFinding(selectedPatientId.value, {
+      text: newFindingForm.value.text.trim()
+    });
+
+    newFindingForm.value = { text: '' };
+    showFindingModal.value = false;
+    await selectPatient(selectedPatientId.value);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Fehler beim Hinzufügen des Befunds';
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const openEditFindingModal = (finding: PatientFinding) => {
+  editingFindingId.value = finding.id || null;
+  newFindingForm.value = {
+    text: finding.text
+  };
+  showEditFindingModal.value = true;
+};
+
+const handleUpdateFinding = async () => {
+  if (!selectedPatientId.value || !editingFindingId.value || !newFindingForm.value.text.trim()) {
+    error.value = 'Bitte geben Sie einen Befund ein';
+    return;
+  }
+  if (!updateReason.value.trim()) {
+    error.value = 'Bitte geben Sie einen Grund für die Änderung an';
+    return;
+  }
+
+  isLoading.value = true;
+  error.value = null;
+  try {
+    await updatePatientFinding(selectedPatientId.value, editingFindingId.value, {
+      text: newFindingForm.value.text.trim(),
+      reason: updateReason.value.trim()
+    });
+
+    newFindingForm.value = { text: '' };
+    updateReason.value = '';
+    editingFindingId.value = null;
+    showEditFindingModal.value = false;
+    await selectPatient(selectedPatientId.value);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Fehler beim Bearbeiten des Befunds';
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const openDeleteFindingModal = (findingId: string) => {
+  deletingFindingId.value = findingId;
+  deleteReason.value = '';
+  showDeleteFindingModal.value = true;
+};
+
+const handleDeleteFinding = async () => {
+  if (!selectedPatientId.value || !deletingFindingId.value || !deleteReason.value.trim()) {
+    error.value = 'Bitte geben Sie einen Grund für die Löschung an';
+    return;
+  }
+
+  isLoading.value = true;
+  error.value = null;
+  try {
+    await deletePatientFinding(selectedPatientId.value, deletingFindingId.value, deleteReason.value.trim());
+    deletingFindingId.value = null;
+    deleteReason.value = '';
+    showDeleteFindingModal.value = false;
+    await selectPatient(selectedPatientId.value);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Fehler beim Löschen des Befunds';
   } finally {
     isLoading.value = false;
   }
@@ -996,7 +1573,7 @@ onMounted(() => {
             <button
               type="button"
               class="inline-flex items-center gap-1.5 rounded-xl border border-accent-sky/30 bg-accent-sky/10 px-3 py-1.5 text-xs font-medium text-accent-sky transition hover:bg-accent-sky/20"
-              @click="showNewPatientModal = true"
+              @click="showPatientWizard = true"
             >
               <PhPlus :size="14" weight="regular" />
               Neu
@@ -1090,9 +1667,35 @@ onMounted(() => {
                 class="text-accent-sky"
               />
             </div>
-            <p class="mt-1 text-sm text-steel-400">
-              Geb. {{ formatDate(selectedPatient.birth_date) }} · ID {{ selectedPatient.patient_id }}
-            </p>
+            <div class="mt-1 flex items-center gap-2">
+              <span class="text-sm text-steel-400">Geb. {{ formatDate(selectedPatient.birth_date) }} ·</span>
+              <div v-if="!isEditingMainDiagnosis" class="flex items-center gap-2">
+                <span class="text-sm text-steel-700">{{ mainDiagnosis || (activeDiagnoses.length > 0 ? activeDiagnoses[0].text : 'Keine Hauptdiagnose') }}</span>
+                <button
+                  type="button"
+                  class="text-steel-400 transition hover:text-accent-sky"
+                  @click="isEditingMainDiagnosis = true"
+                >
+                  <PhPencil :size="14" weight="regular" />
+                </button>
+              </div>
+              <div v-else class="flex items-center gap-2">
+                <input
+                  v-model="mainDiagnosis"
+                  type="text"
+                  class="rounded-lg border border-white/60 bg-white/80 px-2 py-1 text-sm font-medium text-steel-700 outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+                  @keyup.enter="isEditingMainDiagnosis = false"
+                  @blur="isEditingMainDiagnosis = false"
+                />
+                <button
+                  type="button"
+                  class="text-accent-sky transition hover:text-accent-teal"
+                  @click="isEditingMainDiagnosis = false"
+                >
+                  <PhCheck :size="14" weight="regular" />
+                </button>
+              </div>
+            </div>
             <div v-if="selectedPatient.tags.length > 0" class="mt-3 flex flex-wrap gap-2">
               <span
                 v-for="tag in selectedPatient.tags"
@@ -1103,20 +1706,41 @@ onMounted(() => {
               </span>
             </div>
           </div>
-          <div class="flex items-center gap-3">
-            <div class="flex items-center gap-2 text-xs text-steel-400">
-              <PhLock :size="16" weight="regular" />
-              <span>Nur Teamzugriff</span>
-            </div>
-            <button
-              type="button"
-              class="inline-flex items-center gap-2 rounded-xl border border-accent-sky/30 bg-accent-sky/10 px-3 py-1.5 text-sm font-medium text-accent-sky transition hover:bg-accent-sky/20"
-              @click="openEditPatientModal"
-            >
-              <PhPencil :size="16" weight="regular" />
-              Bearbeiten
-            </button>
-          </div>
+              <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 text-xs text-steel-400">
+                  <PhLock :size="16" weight="regular" />
+                  <span>Nur Teamzugriff</span>
+                </div>
+                <div class="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    :disabled="isReviewingPatient"
+                    class="inline-flex items-center gap-2 rounded-xl border border-accent-sky/30 bg-accent-sky/10 px-3 py-1.5 text-sm font-medium text-accent-sky transition hover:bg-accent-sky/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    @click="handleReviewPatient"
+                  >
+                    <PhShieldCheck :size="16" weight="regular" />
+                    <span v-if="isReviewingPatient">Überprüfung...</span>
+                    <span v-else>Durch KI überprüfen</span>
+                  </button>
+                  <button
+                    v-if="hasReviewResult"
+                    type="button"
+                    class="inline-flex items-center gap-2 rounded-xl border border-accent-sky/30 bg-accent-sky/10 px-3 py-1.5 text-sm font-medium text-accent-sky transition hover:bg-accent-sky/20"
+                    @click="handleViewReview"
+                  >
+                    <PhEye :size="16" weight="regular" />
+                    Überprüfung ansehen
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-xl border border-accent-sky/30 bg-accent-sky/10 px-3 py-1.5 text-sm font-medium text-accent-sky transition hover:bg-accent-sky/20"
+                  @click="openEditPatientModal"
+                >
+                  <PhPencil :size="16" weight="regular" />
+                  Bearbeiten
+                </button>
+              </div>
         </div>
 
         <!-- Tabs Navigation -->
@@ -1319,8 +1943,24 @@ onMounted(() => {
                     <span class="font-medium text-steel-700">{{ selectedPatient.vitals_latest.glucose ? `${selectedPatient.vitals_latest.glucose} mg/dl` : '–' }}</span>
                   </div>
                   <div class="flex items-center justify-between">
+                    <span class="text-steel-400">Gewicht</span>
+                    <span class="font-medium text-steel-700">{{ selectedPatient.vitals_latest.weight ? `${selectedPatient.vitals_latest.weight} kg` : '–' }}</span>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-steel-400">Körpergröße</span>
+                    <span class="font-medium text-steel-700">{{ selectedPatient.vitals_latest.height ? `${selectedPatient.vitals_latest.height} cm` : '–' }}</span>
+                  </div>
+                  <div class="flex items-center justify-between">
                     <span class="text-steel-400">BMI</span>
-                    <span class="font-medium text-steel-700">{{ selectedPatient.vitals_latest.bmi || '–' }}</span>
+                    <span class="font-medium text-steel-700">{{ selectedPatient.vitals_latest.bmi ? selectedPatient.vitals_latest.bmi.toFixed(1) : '–' }}</span>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-steel-400">Schmerzskala</span>
+                    <span class="font-medium text-steel-700">{{ selectedPatient.vitals_latest.pain_scale ? `${selectedPatient.vitals_latest.pain_scale}/10` : '–' }}</span>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-steel-400">PMH</span>
+                    <span class="font-medium text-steel-700">{{ selectedPatient.vitals_latest.pmh_total ? `${selectedPatient.vitals_latest.pmh_total}/27` : '–' }}</span>
                   </div>
                   <div v-if="selectedPatient.vitals_latest.updated_at" class="col-span-2 mt-2 text-[10px] text-steel-400">
                     aktualisiert {{ formatDateTime(selectedPatient.vitals_latest.updated_at) }}
@@ -1331,7 +1971,14 @@ onMounted(() => {
 
               <!-- Fieberkurve -->
               <div v-if="activeVitalsHistory.length > 0" class="glass-card flex flex-col gap-4 p-6">
-                <h3 class="text-sm font-semibold text-steel-700">Fieberkurve</h3>
+                <div class="flex items-center justify-between">
+                  <h3 class="text-sm font-semibold text-steel-700">Fieberkurve</h3>
+                  <div class="flex items-center gap-2 text-xs text-steel-400">
+                    <span>Mausrad: Zoomen</span>
+                    <span>•</span>
+                    <span>Drag: Verschieben</span>
+                  </div>
+                </div>
                 <div class="h-80">
                   <Line :data="chartData" :options="chartOptions" />
                 </div>
@@ -1353,12 +2000,13 @@ onMounted(() => {
                         <span v-if="vital.hr">Puls: {{ vital.hr }}</span>
                         <span v-if="vital.temperature">Temp: {{ vital.temperature }}°C</span>
                         <span v-if="vital.spo2">SpO2: {{ vital.spo2 }}%</span>
+                        <span v-if="vital.pain_scale">Schmerz: {{ vital.pain_scale }}/10</span>
                       </div>
                     </div>
                     <button
                       type="button"
                       class="text-steel-400 transition hover:text-red-600"
-                      @click="handleDeleteVital(vital.id)"
+                      @click="openDeleteVitalModal(vital.id)"
                     >
                       <PhTrash :size="12" weight="regular" />
                     </button>
@@ -1396,7 +2044,7 @@ onMounted(() => {
                       v-if="allergy.id"
                       type="button"
                       class="text-steel-400 transition hover:text-red-600"
-                      @click="handleDeleteAllergy(allergy.id)"
+                      @click="openDeleteAllergyModal(allergy.id)"
                     >
                       <PhTrash :size="12" weight="regular" />
                     </button>
@@ -1463,7 +2111,7 @@ onMounted(() => {
                           v-if="med.id"
                           type="button"
                           class="flex-shrink-0 text-steel-400 transition hover:text-red-600"
-                          @click="handleDeleteMedication(med.id)"
+                          @click="openDeleteMedicationModal(med.id)"
                         >
                           <PhTrash :size="14" weight="regular" />
                         </button>
@@ -1472,6 +2120,96 @@ onMounted(() => {
                   </div>
                 </div>
                 <div v-else class="text-sm text-steel-400">Keine Dauermedikation</div>
+              </div>
+
+              <!-- Diagnosen -->
+              <div class="glass-card flex flex-col gap-3 p-4">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-sm font-semibold text-steel-700">Diagnosen</h3>
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1 rounded-xl border border-accent-sky/30 bg-accent-sky/10 px-2 py-1 text-xs font-medium text-accent-sky transition hover:bg-accent-sky/20"
+                    @click="showDiagnosisModal = true"
+                  >
+                    <PhPlus :size="12" weight="regular" />
+                    Hinzufügen
+                  </button>
+                </div>
+                <div v-if="activeDiagnoses.length > 0" class="space-y-2">
+                  <div
+                    v-for="diagnosis in activeDiagnoses"
+                    :key="diagnosis.id || diagnosis.text"
+                    class="flex items-center justify-between rounded-lg border border-white/40 bg-white/20 px-3 py-2 text-sm"
+                  >
+                    <div class="flex-1 min-w-0">
+                      <span class="font-medium text-steel-700">{{ diagnosis.text }}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <button
+                        v-if="diagnosis.id"
+                        type="button"
+                        class="flex-shrink-0 text-steel-400 transition hover:text-accent-sky"
+                        @click="openEditDiagnosisModal(diagnosis)"
+                      >
+                        <PhPencil :size="14" weight="regular" />
+                      </button>
+                      <button
+                        v-if="diagnosis.id"
+                        type="button"
+                        class="flex-shrink-0 text-steel-400 transition hover:text-red-600"
+                        @click="openDeleteDiagnosisModal(diagnosis.id)"
+                      >
+                        <PhTrash :size="14" weight="regular" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="text-sm text-steel-400">Keine Diagnosen hinterlegt</div>
+              </div>
+
+              <!-- Befunde -->
+              <div class="glass-card flex flex-col gap-3 p-4">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-sm font-semibold text-steel-700">Befunde</h3>
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1 rounded-xl border border-accent-sky/30 bg-accent-sky/10 px-2 py-1 text-xs font-medium text-accent-sky transition hover:bg-accent-sky/20"
+                    @click="showFindingModal = true"
+                  >
+                    <PhPlus :size="12" weight="regular" />
+                    Hinzufügen
+                  </button>
+                </div>
+                <div v-if="activeFindings.length > 0" class="space-y-2">
+                  <div
+                    v-for="finding in activeFindings"
+                    :key="finding.id || finding.text"
+                    class="flex items-center justify-between rounded-lg border border-white/40 bg-white/20 px-3 py-2 text-sm"
+                  >
+                    <div class="flex-1 min-w-0">
+                      <span class="font-medium text-steel-700">{{ finding.text }}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <button
+                        v-if="finding.id"
+                        type="button"
+                        class="flex-shrink-0 text-steel-400 transition hover:text-accent-sky"
+                        @click="openEditFindingModal(finding)"
+                      >
+                        <PhPencil :size="14" weight="regular" />
+                      </button>
+                      <button
+                        v-if="finding.id"
+                        type="button"
+                        class="flex-shrink-0 text-steel-400 transition hover:text-red-600"
+                        @click="openDeleteFindingModal(finding.id)"
+                      >
+                        <PhTrash :size="14" weight="regular" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="text-sm text-steel-400">Keine Befunde hinterlegt</div>
               </div>
             </div>
 
@@ -1592,14 +2330,31 @@ onMounted(() => {
         @click.self="showNoteModal = false"
       >
         <div class="glass-card w-full max-w-lg p-6">
-        <h3 class="mb-1 text-lg font-semibold text-steel-700">Notiz hinzufügen</h3>
-        <p class="mb-4 text-xs text-steel-400">Notiz für {{ selectedPatient ? formatName(selectedPatient.name) : 'Patient' }}</p>
-        <textarea
-          v-model="newNoteText"
-          rows="6"
-          placeholder="Freitext..."
-          class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-3 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
-        />
+        <div class="mb-4 flex items-center justify-between">
+          <div>
+            <h3 class="mb-1 text-lg font-semibold text-steel-700">Notiz hinzufügen</h3>
+            <p class="text-xs text-steel-400">Notiz für {{ selectedPatient ? formatName(selectedPatient.name) : 'Patient' }}</p>
+          </div>
+          <button
+            type="button"
+            :disabled="!newNoteText.trim() || isImprovingText"
+            class="flex items-center gap-2 rounded-xl border border-accent-sky/30 bg-accent-sky/10 px-4 py-2 text-sm font-medium text-accent-sky transition hover:bg-accent-sky/20 disabled:cursor-not-allowed disabled:opacity-60"
+            :title="'Mit KI verbessern'"
+            @click="handleImproveText"
+          >
+            <PhSparkle :size="18" weight="regular" :class="{ 'animate-spin': isImprovingText }" />
+            <span v-if="!isImprovingText">Mit KI verbessern</span>
+            <span v-else>Verbessert...</span>
+          </button>
+        </div>
+        <div class="relative">
+          <textarea
+            v-model="newNoteText"
+            rows="6"
+            placeholder="Freitext..."
+            class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-3 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+          />
+        </div>
         <div class="mt-4 flex justify-end gap-2">
           <button
             type="button"
@@ -1621,88 +2376,12 @@ onMounted(() => {
       </div>
     </Teleport>
 
-    <!-- New Patient Modal -->
-    <Teleport to="body">
-      <div
-        v-if="showNewPatientModal"
-        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
-        @click.self="showNewPatientModal = false"
-      >
-        <div class="glass-card w-full max-w-lg p-6">
-        <h3 class="mb-1 text-lg font-semibold text-steel-700">Neuen Patienten hinzufügen</h3>
-        <p class="mb-4 text-xs text-steel-400">Bitte füllen Sie alle Pflichtfelder aus</p>
-        
-        <div class="space-y-4">
-          <div>
-            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">
-              Vorname(n) <span class="text-accent-sky">*</span>
-            </label>
-            <input
-              v-model="newPatientForm.givenNames"
-              type="text"
-              placeholder="z.B. Max, Maria Anna (kommagetrennt)"
-              class="w-full rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
-            />
-            <p class="mt-1 text-xs text-steel-400">Mehrere Vornamen durch Komma trennen</p>
-          </div>
-
-          <div>
-            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">
-              Nachname <span class="text-accent-sky">*</span>
-            </label>
-            <input
-              v-model="newPatientForm.familyName"
-              type="text"
-              placeholder="z.B. Mustermann"
-              class="w-full rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
-            />
-          </div>
-
-          <div>
-            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">
-              Geburtsdatum <span class="text-accent-sky">*</span>
-            </label>
-            <input
-              v-model="newPatientForm.birthDate"
-              type="date"
-              class="w-full rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
-            />
-          </div>
-
-          <div>
-            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">
-              Tags
-            </label>
-            <input
-              v-model="newPatientForm.tags"
-              type="text"
-              placeholder="z.B. Hausbesuch, Hypertonie (kommagetrennt)"
-              class="w-full rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
-            />
-            <p class="mt-1 text-xs text-steel-400">Mehrere Tags durch Komma trennen (optional)</p>
-          </div>
-        </div>
-
-        <div class="mt-6 flex justify-end gap-2">
-          <button
-            type="button"
-            class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
-            @click="showNewPatientModal = false; newPatientForm = { givenNames: '', familyName: '', birthDate: '', tags: '' }"
-          >
-            Abbrechen
-          </button>
-          <button
-            type="button"
-            :disabled="isLoading || !newPatientForm.givenNames.trim() || !newPatientForm.familyName.trim() || !newPatientForm.birthDate"
-            class="rounded-xl bg-gradient-to-br from-accent-sky to-accent-teal px-4 py-2 text-sm font-semibold text-white shadow-pane transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-            @click="handleCreatePatient"
-          >
-            {{ isLoading ? 'Wird erstellt...' : 'Erstellen' }}
-          </button>
-        </div>
-        </div>
-      </div>
-    </Teleport>
+    <!-- Patient Wizard -->
+    <PatientWizard
+      v-if="showPatientWizard"
+      @close="handleWizardClose"
+      @success="handleWizardSuccess"
+    />
 
     <!-- Edit Patient Modal -->
     <Teleport to="body">
@@ -1902,11 +2581,12 @@ onMounted(() => {
     </Teleport>
 
     <!-- Vital Modal -->
-    <div
-      v-if="showVitalModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      @click.self="showVitalModal = false"
-    >
+    <Teleport to="body">
+      <div
+        v-if="showVitalModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+        @click.self="showVitalModal = false"
+      >
       <div class="glass-card w-full max-w-lg p-6">
         <h3 class="mb-1 text-lg font-semibold text-steel-700">Vitalwerte hinzufügen</h3>
         <p class="mb-4 text-xs text-steel-400">Erfassen Sie die Vitalwerte des Patienten</p>
@@ -1973,23 +2653,57 @@ onMounted(() => {
               />
             </div>
           </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Gewicht (kg)</label>
+              <input
+                v-model.number="newVitalForm.weight"
+                type="number"
+                step="0.1"
+                placeholder="z.B. 75.5"
+                class="w-full rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+              />
+            </div>
+            <div>
+              <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Körpergröße (cm)</label>
+              <input
+                v-model.number="newVitalForm.height"
+                type="number"
+                step="0.1"
+                placeholder="z.B. 175"
+                class="w-full rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+              />
+            </div>
+          </div>
           <div>
-            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">BMI</label>
+            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Schmerzskala (1-10)</label>
             <input
-              v-model.number="newVitalForm.bmi"
+              v-model.number="newVitalForm.pain_scale"
               type="number"
-              step="0.1"
-              placeholder="z.B. 22.5"
+              min="1"
+              max="10"
+              placeholder="z.B. 5"
               class="w-full rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
             />
           </div>
+        </div>
+
+        <div class="mt-4 flex items-center justify-between">
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-xl border border-accent-sky/30 bg-accent-sky/10 px-3 py-2 text-sm font-medium text-accent-sky transition hover:bg-accent-sky/20"
+            @click="showPmhModal = true"
+          >
+            <PhActivity :size="16" weight="regular" />
+            PMH ausfüllen
+          </button>
         </div>
 
         <div class="mt-6 flex justify-end gap-2">
           <button
             type="button"
             class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
-            @click="showVitalModal = false; newVitalForm = { bp_systolic: undefined, bp_diastolic: undefined, hr: undefined, temperature: undefined, spo2: undefined, glucose: undefined, bmi: undefined }"
+            @click="showVitalModal = false; newVitalForm = { bp_systolic: undefined, bp_diastolic: undefined, hr: undefined, temperature: undefined, spo2: undefined, glucose: undefined, weight: undefined, height: undefined, pain_scale: undefined }; pmhForm = { q1: undefined, q2: undefined, q3: undefined, q4: undefined, q5: undefined, q6: undefined, q7: undefined, q8: undefined, q9: undefined }"
           >
             Abbrechen
           </button>
@@ -2002,20 +2716,22 @@ onMounted(() => {
             Speichern
           </button>
         </div>
-          </div>
-        </div>
+      </div>
+      </div>
+    </Teleport>
 
-        <!-- Edit Vital Modal -->
-        <div
-          v-if="showEditVitalModal"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          @click.self="showEditVitalModal = false"
-        >
-          <div class="glass-card w-full max-w-lg p-6">
-            <h3 class="mb-1 text-lg font-semibold text-steel-700">Vitalwerte bearbeiten</h3>
-            <p class="mb-4 text-xs text-steel-400">Bearbeiten Sie die Vitalwerte</p>
-            
-            <div class="space-y-4">
+    <!-- Edit Vital Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showEditVitalModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+        @click.self="showEditVitalModal = false"
+      >
+        <div class="glass-card w-full max-w-lg p-6">
+          <h3 class="mb-1 text-lg font-semibold text-steel-700">Vitalwerte bearbeiten</h3>
+          <p class="mb-4 text-xs text-steel-400">Bearbeiten Sie die Vitalwerte</p>
+          
+          <div class="space-y-4">
               <div class="grid grid-cols-2 gap-4">
                 <div>
                   <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">RR Systolisch</label>
@@ -2077,46 +2793,80 @@ onMounted(() => {
                   />
                 </div>
               </div>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Gewicht (kg)</label>
+                  <input
+                    v-model.number="newVitalForm.weight"
+                    type="number"
+                    step="0.1"
+                    placeholder="z.B. 75.5"
+                    class="w-full rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+                  />
+                </div>
+                <div>
+                  <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Körpergröße (cm)</label>
+                  <input
+                    v-model.number="newVitalForm.height"
+                    type="number"
+                    step="0.1"
+                    placeholder="z.B. 175"
+                    class="w-full rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+                  />
+                </div>
+              </div>
               <div>
-                <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">BMI</label>
+                <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Schmerzskala (1-10)</label>
                 <input
-                  v-model.number="newVitalForm.bmi"
+                  v-model.number="newVitalForm.pain_scale"
                   type="number"
-                  step="0.1"
-                  placeholder="z.B. 22.5"
+                  min="1"
+                  max="10"
+                  placeholder="z.B. 5"
                   class="w-full rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
                 />
               </div>
-            </div>
+              <div>
+                <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Grund für die Änderung *</label>
+                <textarea
+                  v-model="updateReason"
+                  rows="2"
+                  placeholder="Bitte geben Sie einen Grund für die Änderung an..."
+                  required
+                  class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+                />
+              </div>
+          </div>
 
-            <div class="mt-6 flex justify-end gap-2">
-              <button
-                type="button"
-                class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
-                @click="showEditVitalModal = false; editingVitalId = null; newVitalForm = { bp_systolic: undefined, bp_diastolic: undefined, hr: undefined, temperature: undefined, spo2: undefined, glucose: undefined, bmi: undefined }"
-              >
-                Abbrechen
-              </button>
-              <button
-                type="button"
-                :disabled="isLoading"
-                class="rounded-xl bg-gradient-to-br from-accent-sky to-accent-teal px-4 py-2 text-sm font-semibold text-white shadow-pane transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-                @click="handleUpdateVital"
-              >
-                Speichern
-              </button>
-            </div>
+          <div class="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
+              @click="showEditVitalModal = false; editingVitalId = null; updateReason = ''; newVitalForm = { bp_systolic: undefined, bp_diastolic: undefined, hr: undefined, temperature: undefined, spo2: undefined, glucose: undefined, weight: undefined, height: undefined, pain_scale: undefined }"
+            >
+              Abbrechen
+            </button>
+            <button
+              type="button"
+              :disabled="isLoading || !updateReason.trim()"
+              class="rounded-xl bg-gradient-to-br from-accent-sky to-accent-teal px-4 py-2 text-sm font-semibold text-white shadow-pane transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              @click="handleUpdateVital"
+            >
+              Speichern
+            </button>
           </div>
         </div>
+      </div>
+    </Teleport>
 
-        <!-- Allergy Modal (Hinzufügen) -->
-        <Teleport to="body">
-          <div
-            v-if="showAllergyModal"
-            class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
-            @click.self="showAllergyModal = false"
-          >
-            <div class="glass-card w-full max-w-lg p-6">
+    <!-- Allergy Modal (Hinzufügen) -->
+    <Teleport to="body">
+      <div
+        v-if="showAllergyModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+        @click.self="showAllergyModal = false"
+      >
+        <div class="glass-card w-full max-w-lg p-6">
         <h3 class="mb-1 text-lg font-semibold text-steel-700">Allergie hinzufügen</h3>
         <p class="mb-4 text-xs text-steel-400">Fügen Sie eine Allergie hinzu</p>
         
@@ -2136,11 +2886,25 @@ onMounted(() => {
             <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">
               Schweregrad <span class="text-accent-sky">*</span>
             </label>
-            <input
+            <select
               v-model="newAllergyForm.severity"
-              type="text"
-              placeholder="z.B. leicht, mittel, schwer"
               class="w-full rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+            >
+              <option value="">Bitte wählen</option>
+              <option value="leicht">Leicht</option>
+              <option value="mittel">Mittel</option>
+              <option value="schwer">Schwer</option>
+            </select>
+          </div>
+          <div>
+            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">
+              Anmerkungen
+            </label>
+            <textarea
+              v-model="newAllergyForm.notes"
+              rows="3"
+              placeholder="Zusätzliche Informationen zur Allergie..."
+              class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
             />
           </div>
         </div>
@@ -2149,7 +2913,7 @@ onMounted(() => {
           <button
             type="button"
             class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
-            @click="showAllergyModal = false; newAllergyForm = { substance: '', severity: '' }"
+            @click="showAllergyModal = false; newAllergyForm = { substance: '', severity: '', notes: '' }"
           >
             Abbrechen
           </button>
@@ -2163,17 +2927,17 @@ onMounted(() => {
           </button>
         </div>
         </div>
-          </div>
-        </Teleport>
+      </div>
+    </Teleport>
 
-        <!-- Edit Allergy Modal -->
-        <Teleport to="body">
-          <div
-            v-if="showEditAllergyModal"
-            class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
-            @click.self="showEditAllergyModal = false"
-          >
-            <div class="glass-card w-full max-w-lg p-6">
+    <!-- Edit Allergy Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showEditAllergyModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+        @click.self="showEditAllergyModal = false"
+      >
+        <div class="glass-card w-full max-w-lg p-6">
         <h3 class="mb-1 text-lg font-semibold text-steel-700">Allergie bearbeiten</h3>
         <p class="mb-4 text-xs text-steel-400">Bearbeiten Sie die Allergie</p>
         
@@ -2193,11 +2957,35 @@ onMounted(() => {
             <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">
               Schweregrad <span class="text-accent-sky">*</span>
             </label>
-            <input
+            <select
               v-model="newAllergyForm.severity"
-              type="text"
-              placeholder="z.B. leicht, mittel, schwer"
               class="w-full rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+            >
+              <option value="">Bitte wählen</option>
+              <option value="leicht">Leicht</option>
+              <option value="mittel">Mittel</option>
+              <option value="schwer">Schwer</option>
+            </select>
+          </div>
+          <div>
+            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">
+              Anmerkungen
+            </label>
+            <textarea
+              v-model="newAllergyForm.notes"
+              rows="3"
+              placeholder="Zusätzliche Informationen zur Allergie..."
+              class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+            />
+          </div>
+          <div>
+            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Grund für die Änderung *</label>
+            <textarea
+              v-model="updateReason"
+              rows="2"
+              placeholder="Bitte geben Sie einen Grund für die Änderung an..."
+              required
+              class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
             />
           </div>
         </div>
@@ -2206,13 +2994,13 @@ onMounted(() => {
           <button
             type="button"
             class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
-            @click="showEditAllergyModal = false; editingAllergyId = null; newAllergyForm = { substance: '', severity: '' }"
+            @click="showEditAllergyModal = false; editingAllergyId = null; updateReason = ''; newAllergyForm = { substance: '', severity: '', notes: '' }"
           >
             Abbrechen
           </button>
           <button
             type="button"
-            :disabled="isLoading || !newAllergyForm.substance.trim() || !newAllergyForm.severity.trim()"
+            :disabled="isLoading || !newAllergyForm.substance.trim() || !newAllergyForm.severity.trim() || !updateReason.trim()"
             class="rounded-xl bg-gradient-to-br from-accent-sky to-accent-teal px-4 py-2 text-sm font-semibold text-white shadow-pane transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
             @click="handleUpdateAllergy"
           >
@@ -2223,14 +3011,14 @@ onMounted(() => {
       </div>
     </Teleport>
 
-        <!-- Medication Modal (Hinzufügen) -->
-        <Teleport to="body">
-          <div
-            v-if="showMedicationModal"
-            class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
-            @click.self="showMedicationModal = false"
-          >
-            <div class="glass-card w-full max-w-lg p-6">
+    <!-- Medication Modal (Hinzufügen) -->
+    <Teleport to="body">
+      <div
+        v-if="showMedicationModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+        @click.self="showMedicationModal = false"
+      >
+        <div class="glass-card w-full max-w-lg p-6">
         <h3 class="mb-1 text-lg font-semibold text-steel-700">Medikation hinzufügen</h3>
         <p class="mb-4 text-xs text-steel-400">Fügen Sie eine Medikation hinzu</p>
         
@@ -2323,17 +3111,17 @@ onMounted(() => {
           </button>
         </div>
         </div>
-          </div>
-        </Teleport>
+      </div>
+    </Teleport>
 
-        <!-- Edit Medication Modal -->
-        <Teleport to="body">
-          <div
-            v-if="showEditMedicationModal"
-            class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
-            @click.self="showEditMedicationModal = false"
-          >
-            <div class="glass-card w-full max-w-lg p-6">
+    <!-- Edit Medication Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showEditMedicationModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+        @click.self="showEditMedicationModal = false"
+      >
+        <div class="glass-card w-full max-w-lg p-6">
         <h3 class="mb-1 text-lg font-semibold text-steel-700">Medikation bearbeiten</h3>
         <p class="mb-4 text-xs text-steel-400">Bearbeiten Sie die Medikation</p>
         
@@ -2406,25 +3194,608 @@ onMounted(() => {
               class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
             />
           </div>
+          <div>
+            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Grund für die Änderung *</label>
+            <textarea
+              v-model="updateReason"
+              rows="2"
+              placeholder="Bitte geben Sie einen Grund für die Änderung an..."
+              required
+              class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+            />
+          </div>
         </div>
 
         <div class="mt-6 flex justify-end gap-2">
           <button
             type="button"
             class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
-            @click="showEditMedicationModal = false; editingMedicationId = null; newMedicationForm = { name: '', dose_morning: '', dose_midday: '', dose_evening: '', dose_night: '', notes: '' }"
+            @click="showEditMedicationModal = false; editingMedicationId = null; updateReason = ''; newMedicationForm = { name: '', dose_morning: '', dose_midday: '', dose_evening: '', dose_night: '', notes: '' }"
           >
             Abbrechen
           </button>
           <button
             type="button"
-            :disabled="isLoading || !newMedicationForm.name.trim() || (!newMedicationForm.dose_morning && !newMedicationForm.dose_midday && !newMedicationForm.dose_evening && !newMedicationForm.dose_night)"
+            :disabled="isLoading || !newMedicationForm.name.trim() || (!newMedicationForm.dose_morning && !newMedicationForm.dose_midday && !newMedicationForm.dose_evening && !newMedicationForm.dose_night) || !updateReason.trim()"
             class="rounded-xl bg-gradient-to-br from-accent-sky to-accent-teal px-4 py-2 text-sm font-semibold text-white shadow-pane transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
             @click="handleUpdateMedication"
           >
             Speichern
           </button>
         </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- PMH Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showPmhModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 overflow-auto"
+        @click.self="showPmhModal = false"
+      >
+        <div class="glass-card w-full max-w-3xl p-6 my-8">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-lg font-semibold text-steel-700">Positive Mental Health Scale</h3>
+              <p class="mt-1 text-xs text-steel-400">Geben Sie bitte für jede Aussage an, wie sehr Sie ihr zustimmen. Bitte lassen Sie keine Aussage aus.</p>
+            </div>
+            <button
+              type="button"
+              class="rounded-lg border border-white/60 bg-white/40 p-2 text-steel-700 transition hover:bg-white/60"
+              @click="showPmhModal = false"
+            >
+              <PhX :size="20" weight="regular" />
+            </button>
+          </div>
+
+          <div class="space-y-4 max-h-[70vh] overflow-auto scrollbar-hide pr-2">
+            <div
+              v-for="(question, index) in pmhQuestions"
+              :key="index"
+              class="rounded-xl border border-white/60 bg-white/40 p-4"
+            >
+              <div class="mb-3 text-sm font-medium text-steel-700">
+                {{ index + 1 }}. {{ question }}
+              </div>
+              <div class="grid grid-cols-4 gap-2">
+                <button
+                  v-for="value in [0, 1, 2, 3]"
+                  :key="value"
+                  type="button"
+                  :class="[
+                    'rounded-lg border px-3 py-2 text-sm font-medium transition',
+                    (pmhForm as any)[`q${index + 1}`] === value
+                      ? 'border-accent-sky bg-accent-sky/20 text-accent-sky'
+                      : 'border-white/60 bg-white/60 text-steel-600 hover:bg-white/80'
+                  ]"
+                  @click="(pmhForm as any)[`q${index + 1}`] = value"
+                >
+                  {{ value === 0 ? '0 = stimme nicht zu' : value === 1 ? '1 = stimme eher nicht zu' : value === 2 ? '2 = stimme eher zu' : '3 = stimme zu' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-6 flex items-center justify-between border-t border-white/30 pt-4">
+            <div class="text-sm text-steel-600">
+              <span class="font-medium">Gesamtwert:</span>
+              {{ pmhTotal }}
+            </div>
+            <div class="flex gap-2">
+              <button
+                type="button"
+                class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
+                @click="showPmhModal = false"
+              >
+                Schließen
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Review Patient Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showReviewModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+        @click.self="showReviewModal = false"
+      >
+        <div class="glass-card w-full max-w-3xl p-6 max-h-[90vh] flex flex-col">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-steel-700">KI-Überprüfung</h3>
+            <button
+              type="button"
+              class="rounded-lg border border-white/60 bg-white/40 p-2 text-steel-700 transition hover:bg-white/60"
+              @click="showReviewModal = false"
+            >
+              <PhX :size="20" weight="regular" />
+            </button>
+          </div>
+          <div class="flex-1 overflow-auto scrollbar-hide pr-2">
+            <div v-if="patientReviewResult" class="whitespace-pre-wrap text-sm leading-relaxed text-steel-700">
+              {{ patientReviewResult }}
+            </div>
+            <div v-else class="text-sm text-steel-400">
+              Keine Ergebnisse verfügbar
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Diagnosis Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showDiagnosisModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+        @click.self="showDiagnosisModal = false"
+      >
+        <div class="glass-card w-full max-w-lg p-6">
+          <div class="mb-4 flex items-center justify-between">
+            <div>
+              <h3 class="mb-1 text-lg font-semibold text-steel-700">Diagnose hinzufügen</h3>
+              <p class="text-xs text-steel-400">Die Diagnose wird im Format "[ICD-10-Code] - [Fachbegriff] ([Bemerkung])" formatiert</p>
+            </div>
+            <button
+              type="button"
+              :disabled="!newDiagnosisForm.text.trim() || isImprovingDiagnosis"
+              class="flex items-center gap-2 rounded-xl border border-accent-sky/30 bg-accent-sky/10 px-4 py-2 text-sm font-medium text-accent-sky transition hover:bg-accent-sky/20 disabled:cursor-not-allowed disabled:opacity-60"
+              :title="'Mit KI formatieren'"
+              @click="handleImproveDiagnosis"
+            >
+              <PhSparkle :size="18" weight="regular" :class="{ 'animate-spin': isImprovingDiagnosis }" />
+              <span v-if="!isImprovingDiagnosis">Mit KI formatieren</span>
+              <span v-else>Formatiert...</span>
+            </button>
+          </div>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Diagnose</label>
+              <textarea
+                v-model="newDiagnosisForm.text"
+                rows="3"
+                placeholder="z.B. Hypertonie, primär"
+                class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+              />
+            </div>
+          </div>
+
+          <div class="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
+              @click="showDiagnosisModal = false; newDiagnosisForm = { text: '' }"
+            >
+              Abbrechen
+            </button>
+            <button
+              type="button"
+              :disabled="isLoading || !newDiagnosisForm.text.trim()"
+              class="rounded-xl bg-gradient-to-br from-accent-sky to-accent-teal px-4 py-2 text-sm font-semibold text-white shadow-pane transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              @click="handleAddDiagnosis"
+            >
+              Speichern
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Edit Diagnosis Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showEditDiagnosisModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+        @click.self="showEditDiagnosisModal = false"
+      >
+        <div class="glass-card w-full max-w-lg p-6">
+          <div class="mb-4 flex items-center justify-between">
+            <div>
+              <h3 class="mb-1 text-lg font-semibold text-steel-700">Diagnose bearbeiten</h3>
+              <p class="text-xs text-steel-400">Die Diagnose wird im Format "[ICD-10-Code] - [Fachbegriff] ([Bemerkung])" formatiert</p>
+            </div>
+            <button
+              type="button"
+              :disabled="!newDiagnosisForm.text.trim() || isImprovingDiagnosis"
+              class="flex items-center gap-2 rounded-xl border border-accent-sky/30 bg-accent-sky/10 px-4 py-2 text-sm font-medium text-accent-sky transition hover:bg-accent-sky/20 disabled:cursor-not-allowed disabled:opacity-60"
+              :title="'Mit KI formatieren'"
+              @click="handleImproveDiagnosis"
+            >
+              <PhSparkle :size="18" weight="regular" :class="{ 'animate-spin': isImprovingDiagnosis }" />
+              <span v-if="!isImprovingDiagnosis">Mit KI formatieren</span>
+              <span v-else>Formatiert...</span>
+            </button>
+          </div>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Diagnose</label>
+              <textarea
+                v-model="newDiagnosisForm.text"
+                rows="3"
+                placeholder="z.B. Hypertonie, primär"
+                class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+              />
+            </div>
+            <div>
+              <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Grund für die Änderung *</label>
+              <textarea
+                v-model="updateReason"
+                rows="2"
+                placeholder="Bitte geben Sie einen Grund für die Änderung an..."
+                required
+                class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+              />
+            </div>
+          </div>
+
+          <div class="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
+              @click="showEditDiagnosisModal = false; editingDiagnosisId = null; updateReason = ''; newDiagnosisForm = { text: '' }"
+            >
+              Abbrechen
+            </button>
+            <button
+              type="button"
+              :disabled="isLoading || !newDiagnosisForm.text.trim() || !updateReason.trim()"
+              class="rounded-xl bg-gradient-to-br from-accent-sky to-accent-teal px-4 py-2 text-sm font-semibold text-white shadow-pane transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              @click="handleUpdateDiagnosis"
+            >
+              Speichern
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Finding Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showFindingModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+        @click.self="showFindingModal = false"
+      >
+        <div class="glass-card w-full max-w-lg p-6">
+          <div class="mb-4 flex items-center justify-between">
+            <div>
+              <h3 class="mb-1 text-lg font-semibold text-steel-700">Befund hinzufügen</h3>
+              <p class="text-xs text-steel-400">Der Befund wird fachlich korrekt formatiert</p>
+            </div>
+            <button
+              type="button"
+              :disabled="!newFindingForm.text.trim() || isImprovingFinding"
+              class="flex items-center gap-2 rounded-xl border border-accent-sky/30 bg-accent-sky/10 px-4 py-2 text-sm font-medium text-accent-sky transition hover:bg-accent-sky/20 disabled:cursor-not-allowed disabled:opacity-60"
+              :title="'Mit KI formatieren'"
+              @click="handleImproveFinding"
+            >
+              <PhSparkle :size="18" weight="regular" :class="{ 'animate-spin': isImprovingFinding }" />
+              <span v-if="!isImprovingFinding">Mit KI formatieren</span>
+              <span v-else>Formatiert...</span>
+            </button>
+          </div>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Befund</label>
+              <textarea
+                v-model="newFindingForm.text"
+                rows="5"
+                placeholder="Freitext-Befund eingeben..."
+                class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+              />
+            </div>
+          </div>
+
+          <div class="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
+              @click="showFindingModal = false; newFindingForm = { text: '' }"
+            >
+              Abbrechen
+            </button>
+            <button
+              type="button"
+              :disabled="isLoading || !newFindingForm.text.trim()"
+              class="rounded-xl bg-gradient-to-br from-accent-sky to-accent-teal px-4 py-2 text-sm font-semibold text-white shadow-pane transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              @click="handleAddFinding"
+            >
+              Speichern
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Edit Finding Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showEditFindingModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+        @click.self="showEditFindingModal = false"
+      >
+        <div class="glass-card w-full max-w-lg p-6">
+          <div class="mb-4 flex items-center justify-between">
+            <div>
+              <h3 class="mb-1 text-lg font-semibold text-steel-700">Befund bearbeiten</h3>
+              <p class="text-xs text-steel-400">Der Befund wird fachlich korrekt formatiert</p>
+            </div>
+            <button
+              type="button"
+              :disabled="!newFindingForm.text.trim() || isImprovingFinding"
+              class="flex items-center gap-2 rounded-xl border border-accent-sky/30 bg-accent-sky/10 px-4 py-2 text-sm font-medium text-accent-sky transition hover:bg-accent-sky/20 disabled:cursor-not-allowed disabled:opacity-60"
+              :title="'Mit KI formatieren'"
+              @click="handleImproveFinding"
+            >
+              <PhSparkle :size="18" weight="regular" :class="{ 'animate-spin': isImprovingFinding }" />
+              <span v-if="!isImprovingFinding">Mit KI formatieren</span>
+              <span v-else>Formatiert...</span>
+            </button>
+          </div>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Befund</label>
+              <textarea
+                v-model="newFindingForm.text"
+                rows="5"
+                placeholder="Freitext-Befund eingeben..."
+                class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+              />
+            </div>
+            <div>
+              <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Grund für die Änderung *</label>
+              <textarea
+                v-model="updateReason"
+                rows="2"
+                placeholder="Bitte geben Sie einen Grund für die Änderung an..."
+                required
+                class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+              />
+            </div>
+          </div>
+
+          <div class="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
+              @click="showEditFindingModal = false; editingFindingId = null; updateReason = ''; newFindingForm = { text: '' }"
+            >
+              Abbrechen
+            </button>
+            <button
+              type="button"
+              :disabled="isLoading || !newFindingForm.text.trim() || !updateReason.trim()"
+              class="rounded-xl bg-gradient-to-br from-accent-sky to-accent-teal px-4 py-2 text-sm font-semibold text-white shadow-pane transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              @click="handleUpdateFinding"
+            >
+              Speichern
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Delete Modals -->
+    <Teleport to="body">
+      <!-- Delete Vital Modal -->
+      <div
+        v-if="showDeleteVitalModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+        @click.self="showDeleteVitalModal = false"
+      >
+        <div class="glass-card w-full max-w-md p-6">
+          <h3 class="mb-1 text-lg font-semibold text-steel-700">Vitalwerte löschen</h3>
+          <p class="mb-4 text-xs text-steel-400">Bitte geben Sie einen Grund für die Löschung an</p>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Grund für die Löschung *</label>
+              <textarea
+                v-model="deleteReason"
+                rows="3"
+                placeholder="Bitte geben Sie einen Grund für die Löschung an..."
+                required
+                class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+              />
+            </div>
+          </div>
+
+          <div class="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
+              @click="showDeleteVitalModal = false; deleteReason = ''; deletingVitalId = null"
+            >
+              Abbrechen
+            </button>
+            <button
+              type="button"
+              :disabled="isLoading || !deleteReason.trim()"
+              class="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-pane transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              @click="handleDeleteVital"
+            >
+              Löschen
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Delete Allergy Modal -->
+      <div
+        v-if="showDeleteAllergyModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+        @click.self="showDeleteAllergyModal = false"
+      >
+        <div class="glass-card w-full max-w-md p-6">
+          <h3 class="mb-1 text-lg font-semibold text-steel-700">Allergie löschen</h3>
+          <p class="mb-4 text-xs text-steel-400">Bitte geben Sie einen Grund für die Löschung an</p>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Grund für die Löschung *</label>
+              <textarea
+                v-model="deleteReason"
+                rows="3"
+                placeholder="Bitte geben Sie einen Grund für die Löschung an..."
+                required
+                class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+              />
+            </div>
+          </div>
+
+          <div class="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
+              @click="showDeleteAllergyModal = false; deleteReason = ''; deletingAllergyId = null"
+            >
+              Abbrechen
+            </button>
+            <button
+              type="button"
+              :disabled="isLoading || !deleteReason.trim()"
+              class="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-pane transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              @click="handleDeleteAllergy"
+            >
+              Löschen
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Delete Medication Modal -->
+      <div
+        v-if="showDeleteMedicationModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+        @click.self="showDeleteMedicationModal = false"
+      >
+        <div class="glass-card w-full max-w-md p-6">
+          <h3 class="mb-1 text-lg font-semibold text-steel-700">Medikation löschen</h3>
+          <p class="mb-4 text-xs text-steel-400">Bitte geben Sie einen Grund für die Löschung an</p>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Grund für die Löschung *</label>
+              <textarea
+                v-model="deleteReason"
+                rows="3"
+                placeholder="Bitte geben Sie einen Grund für die Löschung an..."
+                required
+                class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+              />
+            </div>
+          </div>
+
+          <div class="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
+              @click="showDeleteMedicationModal = false; deleteReason = ''; deletingMedicationId = null"
+            >
+              Abbrechen
+            </button>
+            <button
+              type="button"
+              :disabled="isLoading || !deleteReason.trim()"
+              class="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-pane transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              @click="handleDeleteMedication"
+            >
+              Löschen
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Delete Diagnosis Modal -->
+      <div
+        v-if="showDeleteDiagnosisModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+        @click.self="showDeleteDiagnosisModal = false"
+      >
+        <div class="glass-card w-full max-w-md p-6">
+          <h3 class="mb-1 text-lg font-semibold text-steel-700">Diagnose löschen</h3>
+          <p class="mb-4 text-xs text-steel-400">Bitte geben Sie einen Grund für die Löschung an</p>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Grund für die Löschung *</label>
+              <textarea
+                v-model="deleteReason"
+                rows="3"
+                placeholder="Bitte geben Sie einen Grund für die Löschung an..."
+                required
+                class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+              />
+            </div>
+          </div>
+
+          <div class="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
+              @click="showDeleteDiagnosisModal = false; deleteReason = ''; deletingDiagnosisId = null"
+            >
+              Abbrechen
+            </button>
+            <button
+              type="button"
+              :disabled="isLoading || !deleteReason.trim()"
+              class="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-pane transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              @click="handleDeleteDiagnosis"
+            >
+              Löschen
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Delete Finding Modal -->
+      <div
+        v-if="showDeleteFindingModal"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+        @click.self="showDeleteFindingModal = false"
+      >
+        <div class="glass-card w-full max-w-md p-6">
+          <h3 class="mb-1 text-lg font-semibold text-steel-700">Befund löschen</h3>
+          <p class="mb-4 text-xs text-steel-400">Bitte geben Sie einen Grund für die Löschung an</p>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.28em] text-steel-200">Grund für die Löschung *</label>
+              <textarea
+                v-model="deleteReason"
+                rows="3"
+                placeholder="Bitte geben Sie einen Grund für die Löschung an..."
+                required
+                class="w-full resize-none rounded-xl border border-white/60 bg-white/80 px-4 py-2.5 text-sm font-medium text-steel-700 shadow-[0_8px_16px_rgba(12,31,47,0.1)] outline-none transition focus:border-accent-sky/80 focus:ring-2 focus:ring-accent-sky/20"
+              />
+            </div>
+          </div>
+
+          <div class="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              class="rounded-xl border border-white/60 bg-white/40 px-4 py-2 text-sm font-medium text-steel-700 transition hover:bg-white/60"
+              @click="showDeleteFindingModal = false; deleteReason = ''; deletingFindingId = null"
+            >
+              Abbrechen
+            </button>
+            <button
+              type="button"
+              :disabled="isLoading || !deleteReason.trim()"
+              class="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-pane transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              @click="handleDeleteFinding"
+            >
+              Löschen
+            </button>
+          </div>
         </div>
       </div>
     </Teleport>
