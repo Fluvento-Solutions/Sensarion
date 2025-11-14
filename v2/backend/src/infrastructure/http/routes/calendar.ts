@@ -239,30 +239,48 @@ export async function calendarRoutes(fastify: FastifyInstance): Promise<void> {
       const user = request.user!;
       const { calendarIds, startDate, endDate } = request.query as any;
       
-      const where: any = {
-        calendar: {
-          tenantId: user.tenantId
-        }
-      };
+      // First, get all calendar IDs for this tenant
+      const tenantCalendars = await prisma.calendar.findMany({
+        where: { tenantId: user.tenantId },
+        select: { id: true }
+      });
+      const tenantCalendarIds = tenantCalendars.map(c => c.id);
       
-      if (calendarIds && Array.isArray(calendarIds) && calendarIds.length > 0) {
-        where.calendarId = { in: calendarIds };
+      if (tenantCalendarIds.length === 0) {
+        return reply.status(200).send({ events: [] });
       }
       
+      // Build where clause
+      const whereConditions: any[] = [
+        {
+          calendarId: { in: tenantCalendarIds }
+        }
+      ];
+      
+      // Filter by specific calendar IDs if provided (must be subset of tenant calendars)
+      if (calendarIds && Array.isArray(calendarIds) && calendarIds.length > 0) {
+        const validCalendarIds = calendarIds.filter((id: string) => tenantCalendarIds.includes(id));
+        if (validCalendarIds.length > 0) {
+          whereConditions[0] = { calendarId: { in: validCalendarIds } };
+        } else {
+          return reply.status(200).send({ events: [] });
+        }
+      }
+      
+      // Filter by date range if provided
       if (startDate && endDate) {
         const start = new Date(startDate);
         const end = new Date(endDate);
-        where.AND = [
-          ...(where.AND || []),
-          {
-            OR: [
-              { startTime: { gte: start, lte: end } },
-              { endTime: { gte: start, lte: end } },
-              { AND: [{ startTime: { lte: start } }, { endTime: { gte: end } }] }
-            ]
-          }
-        ];
+        whereConditions.push({
+          OR: [
+            { startTime: { gte: start, lte: end } },
+            { endTime: { gte: start, lte: end } },
+            { AND: [{ startTime: { lte: start } }, { endTime: { gte: end } }] }
+          ]
+        });
       }
+      
+      const where = whereConditions.length === 1 ? whereConditions[0] : { AND: whereConditions };
       
       const events = await prisma.calendarEvent.findMany({
         where,
@@ -336,9 +354,25 @@ export async function calendarRoutes(fastify: FastifyInstance): Promise<void> {
         updatedAt: event.updatedAt.toISOString()
       }))
     });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching calendar events:', error);
-      throw error;
+      console.error('Error details:', {
+        message: error?.message,
+        stack: error?.stack,
+        code: error?.code,
+        meta: error?.meta
+      });
+      // Return a proper error response
+      if (error?.code === 'P2002') {
+        throw ProblemDetailsFactory.conflict('Calendar event conflict', request.url);
+      }
+      if (error?.code?.startsWith('P')) {
+        throw ProblemDetailsFactory.badRequest(`Database error: ${error.message}`, request.url);
+      }
+      throw ProblemDetailsFactory.internalServerError(
+        error?.message || 'Fehler beim Abrufen der Kalender-Events',
+        request.url
+      );
     }
   });
   
