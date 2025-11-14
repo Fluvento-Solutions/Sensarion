@@ -1148,25 +1148,54 @@ export async function patientRoutes(fastify: FastifyInstance): Promise<void> {
       }
     }
   }, async (request, reply) => {
-    const user = request.user!;
-    const { id } = request.params as { id: string };
-    const dto = request.body as any;
-    
-    const patient = await patientRepository.findById(id, user.tenantId);
-    if (!patient) {
-      throw ProblemDetailsFactory.notFound('Patient', id, request.url);
-    }
-    
-    const { prisma } = await import('@/infrastructure/db/client');
-    const note = await prisma.patientNote.create({
-      data: {
-        patientId: id,
-        authorId: user.id,
-        text: dto.text
+    try {
+      const user = request.user!;
+      const { id } = request.params as { id: string };
+      const dto = request.body as any;
+      
+      const patient = await patientRepository.findById(id, user.tenantId);
+      if (!patient) {
+        throw ProblemDetailsFactory.notFound('Patient', id, request.url);
       }
-    });
-    
-    return reply.status(201).send({ note });
+      
+      const { prisma } = await import('@/infrastructure/db/client');
+      const note = await prisma.patientNote.create({
+        data: {
+          patientId: id,
+          authorId: user.userId, // Fixed: use userId instead of id
+          text: dto.text
+        }
+      });
+      
+      return reply.status(201).send({ note });
+    } catch (error: any) {
+      console.error('[Patients] Error creating note:', {
+        error: error?.message,
+        stack: error?.stack,
+        code: error?.code,
+        meta: error?.meta
+      });
+      
+      if (error?.code === 'P2002') {
+        throw ProblemDetailsFactory.conflict('Note conflict', request.url);
+      }
+      if (error?.code === 'P2003') {
+        throw ProblemDetailsFactory.badRequest('Foreign key constraint failed', request.url);
+      }
+      if (error?.code?.startsWith('P')) {
+        throw ProblemDetailsFactory.badRequest(`Database error: ${error.message}`, request.url);
+      }
+      
+      // Re-throw if it's already a ProblemDetails
+      if (error?.status) {
+        throw error;
+      }
+      
+      throw ProblemDetailsFactory.internalServerError(
+        error?.message || 'Fehler beim Erstellen der Notiz',
+        request.url
+      );
+    }
   });
 
   // ============================================================================
@@ -1210,27 +1239,56 @@ export async function patientRoutes(fastify: FastifyInstance): Promise<void> {
       }
     }
   }, async (request, reply) => {
-    const user = request.user!;
-    const { id } = request.params as { id: string };
-    const dto = request.body as any;
-    
-    const patient = await patientRepository.findById(id, user.tenantId);
-    if (!patient) {
-      throw ProblemDetailsFactory.notFound('Patient', id, request.url);
-    }
-    
-    const { prisma } = await import('@/infrastructure/db/client');
-    const encounter = await prisma.encounter.create({
-      data: {
-        patientId: id,
-        date: new Date(dto.date),
-        location: dto.location,
-        reason: dto.reason,
-        summary: dto.summary
+    try {
+      const user = request.user!;
+      const { id } = request.params as { id: string };
+      const dto = request.body as any;
+      
+      const patient = await patientRepository.findById(id, user.tenantId);
+      if (!patient) {
+        throw ProblemDetailsFactory.notFound('Patient', id, request.url);
       }
-    });
-    
-    return reply.status(201).send({ encounter });
+      
+      const { prisma } = await import('@/infrastructure/db/client');
+      const encounter = await prisma.encounter.create({
+        data: {
+          patientId: id,
+          date: new Date(dto.date),
+          location: dto.location,
+          reason: dto.reason,
+          summary: dto.summary
+        }
+      });
+      
+      return reply.status(201).send({ encounter });
+    } catch (error: any) {
+      console.error('[Patients] Error creating encounter:', {
+        error: error?.message,
+        stack: error?.stack,
+        code: error?.code,
+        meta: error?.meta
+      });
+      
+      if (error?.code === 'P2002') {
+        throw ProblemDetailsFactory.conflict('Encounter conflict', request.url);
+      }
+      if (error?.code === 'P2003') {
+        throw ProblemDetailsFactory.badRequest('Foreign key constraint failed', request.url);
+      }
+      if (error?.code?.startsWith('P')) {
+        throw ProblemDetailsFactory.badRequest(`Database error: ${error.message}`, request.url);
+      }
+      
+      // Re-throw if it's already a ProblemDetails
+      if (error?.status) {
+        throw error;
+      }
+      
+      throw ProblemDetailsFactory.internalServerError(
+        error?.message || 'Fehler beim Erstellen des Kontakts',
+        request.url
+      );
+    }
   });
 
   // ============================================================================
