@@ -231,55 +231,82 @@ export async function patientRoutes(fastify: FastifyInstance): Promise<void> {
       }
     }
   }, async (request, reply) => {
-    const user = request.user!;
-    const { id } = request.params as { id: string };
-    const dto = request.body as any;
-    
-    const patient = await patientRepository.findById(id, user.tenantId);
-    if (!patient) {
-      throw ProblemDetailsFactory.notFound('Patient', id, request.url);
-    }
-    
-    const vitalsHistory = [...(patient.vitalsHistory || [])];
-    const newVital = {
-      id: `vital-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      recordedAt: new Date().toISOString(),
-      ...dto,
-      is_deleted: false,
-      deleted_at: null
-    };
-    
-    vitalsHistory.push(newVital);
-    
-    // Update vitalsLatest
-    const vitalsLatest = {
-      bp_systolic: dto.bp_systolic,
-      bp_diastolic: dto.bp_diastolic,
-      hr: dto.hr,
-      temperature: dto.temperature,
-      spo2: dto.spo2,
-      glucose: dto.glucose,
-      weight: dto.weight,
-      height: dto.height,
-      bmi: dto.bmi,
-      pain_scale: dto.pain_scale,
-      pmh_responses: dto.pmh_responses,
-      pmh_total: dto.pmh_total,
-      updated_at: new Date().toISOString()
-    };
-    
-    // Update patient directly with Prisma
-    const { prisma } = await import('@/infrastructure/db/client');
-    await prisma.patient.update({
-      where: { id: patient.id as string },
-      data: {
-        vitalsHistory,
-        vitalsLatest,
-        version: { increment: 1 }
+    try {
+      const user = request.user!;
+      const { id } = request.params as { id: string };
+      const dto = request.body as any;
+      
+      const patient = await patientRepository.findById(id, user.tenantId);
+      if (!patient) {
+        throw ProblemDetailsFactory.notFound('Patient', id, request.url);
       }
-    });
-    
-    return reply.status(201).send({ vital: newVital });
+      
+      const vitalsHistory = [...(patient.vitalsHistory || [])];
+      const newVital = {
+        id: `vital-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        recordedAt: new Date().toISOString(),
+        ...dto,
+        is_deleted: false,
+        deleted_at: null
+      };
+      
+      vitalsHistory.push(newVital);
+      
+      // Update vitalsLatest (only include fields that are present in dto)
+      const vitalsLatest: any = {
+        updated_at: new Date().toISOString()
+      };
+      
+      if (dto.bp_systolic !== undefined) vitalsLatest.bp_systolic = dto.bp_systolic;
+      if (dto.bp_diastolic !== undefined) vitalsLatest.bp_diastolic = dto.bp_diastolic;
+      if (dto.hr !== undefined) vitalsLatest.hr = dto.hr;
+      if (dto.temperature !== undefined) vitalsLatest.temperature = dto.temperature;
+      if (dto.spo2 !== undefined) vitalsLatest.spo2 = dto.spo2;
+      if (dto.glucose !== undefined) vitalsLatest.glucose = dto.glucose;
+      if (dto.weight !== undefined) vitalsLatest.weight = dto.weight;
+      if (dto.height !== undefined) vitalsLatest.height = dto.height;
+      if (dto.bmi !== undefined) vitalsLatest.bmi = dto.bmi;
+      if (dto.pain_scale !== undefined) vitalsLatest.pain_scale = dto.pain_scale;
+      if (dto.pmh_responses !== undefined) vitalsLatest.pmh_responses = dto.pmh_responses;
+      if (dto.pmh_total !== undefined) vitalsLatest.pmh_total = dto.pmh_total;
+      
+      // Update patient directly with Prisma
+      const { prisma } = await import('@/infrastructure/db/client');
+      await prisma.patient.update({
+        where: { id: patient.id as string },
+        data: {
+          vitalsHistory,
+          vitalsLatest,
+          version: { increment: 1 }
+        }
+      });
+      
+      return reply.status(201).send({ vital: newVital });
+    } catch (error: any) {
+      console.error('[Patients] Error creating vital:', {
+        error: error?.message,
+        stack: error?.stack,
+        code: error?.code,
+        meta: error?.meta
+      });
+      
+      if (error?.code === 'P2002') {
+        throw ProblemDetailsFactory.conflict('Vital conflict', request.url);
+      }
+      if (error?.code?.startsWith('P')) {
+        throw ProblemDetailsFactory.badRequest(`Database error: ${error.message}`, request.url);
+      }
+      
+      // Re-throw if it's already a ProblemDetails
+      if (error?.status) {
+        throw error;
+      }
+      
+      throw ProblemDetailsFactory.internalServerError(
+        error?.message || 'Fehler beim Erstellen der Vitalwerte',
+        request.url
+      );
+    }
   });
   
   // PATCH /patients/:id/vitals/:vitalId
