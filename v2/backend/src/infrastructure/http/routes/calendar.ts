@@ -235,29 +235,37 @@ export async function calendarRoutes(fastify: FastifyInstance): Promise<void> {
       }
     }
   }, async (request, reply) => {
-    const user = request.user!;
-    const { calendarIds, startDate, endDate } = request.query as any;
-    
-    const where: any = {
-      calendar: {
-        tenantId: user.tenantId
+    try {
+      const user = request.user!;
+      const { calendarIds, startDate, endDate } = request.query as any;
+      
+      const where: any = {
+        calendar: {
+          tenantId: user.tenantId
+        }
+      };
+      
+      if (calendarIds && Array.isArray(calendarIds) && calendarIds.length > 0) {
+        where.calendarId = { in: calendarIds };
       }
-    };
-    
-    if (calendarIds && calendarIds.length > 0) {
-      where.calendarId = { in: calendarIds };
-    }
-    
-    if (startDate && endDate) {
-      where.OR = [
-        { startTime: { gte: new Date(startDate), lte: new Date(endDate) } },
-        { endTime: { gte: new Date(startDate), lte: new Date(endDate) } },
-        { AND: [{ startTime: { lte: new Date(startDate) } }, { endTime: { gte: new Date(endDate) } }] }
-      ];
-    }
-    
-    const events = await prisma.calendarEvent.findMany({
-      where,
+      
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        where.AND = [
+          ...(where.AND || []),
+          {
+            OR: [
+              { startTime: { gte: start, lte: end } },
+              { endTime: { gte: start, lte: end } },
+              { AND: [{ startTime: { lte: start } }, { endTime: { gte: end } }] }
+            ]
+          }
+        ];
+      }
+      
+      const events = await prisma.calendarEvent.findMany({
+        where,
       include: {
         calendar: {
           select: {
@@ -270,7 +278,8 @@ export async function calendarRoutes(fastify: FastifyInstance): Promise<void> {
         patient: {
           select: {
             id: true,
-            name: true
+            name: true,
+            birthDate: true
           }
         },
         participants: {
@@ -301,7 +310,7 @@ export async function calendarRoutes(fastify: FastifyInstance): Promise<void> {
         patientId: event.patientId,
         patient: event.patient ? {
           id: event.patient.id,
-          name: event.patient.name
+          name: event.patient.name as any
         } : null,
         recurrenceRule: event.recurrenceRule as any,
         recurrenceEndDate: event.recurrenceEndDate?.toISOString(),
@@ -327,6 +336,10 @@ export async function calendarRoutes(fastify: FastifyInstance): Promise<void> {
         updatedAt: event.updatedAt.toISOString()
       }))
     });
+    } catch (error) {
+      console.error('Error fetching calendar events:', error);
+      throw error;
+    }
   });
   
   fastify.post('/calendar-events', {
@@ -392,7 +405,8 @@ export async function calendarRoutes(fastify: FastifyInstance): Promise<void> {
         patient: {
           select: {
             id: true,
-            name: true
+            name: true,
+            birthDate: true
           }
         },
         participants: {
@@ -464,7 +478,7 @@ export async function calendarRoutes(fastify: FastifyInstance): Promise<void> {
           patientId: eventWithParticipants!.patientId,
           patient: eventWithParticipants!.patient ? {
             id: eventWithParticipants!.patient.id,
-            name: eventWithParticipants!.patient.name
+            name: eventWithParticipants!.patient.name as any
           } : null,
           recurrenceRule: eventWithParticipants!.recurrenceRule as any,
           recurrenceEndDate: eventWithParticipants!.recurrenceEndDate?.toISOString(),
@@ -504,7 +518,7 @@ export async function calendarRoutes(fastify: FastifyInstance): Promise<void> {
         patientId: event.patientId,
         patient: event.patient ? {
           id: event.patient.id,
-          name: event.patient.name
+          name: event.patient.name as any
         } : null,
         recurrenceRule: event.recurrenceRule as any,
         recurrenceEndDate: event.recurrenceEndDate?.toISOString(),
@@ -589,7 +603,8 @@ export async function calendarRoutes(fastify: FastifyInstance): Promise<void> {
         patient: {
           select: {
             id: true,
-            name: true
+            name: true,
+            birthDate: true
           }
         },
         participants: {
@@ -619,7 +634,7 @@ export async function calendarRoutes(fastify: FastifyInstance): Promise<void> {
         patientId: event.patientId,
         patient: event.patient ? {
           id: event.patient.id,
-          name: event.patient.name
+          name: event.patient.name as any
         } : null,
         recurrenceRule: event.recurrenceRule as any,
         recurrenceEndDate: event.recurrenceEndDate?.toISOString(),
