@@ -56,41 +56,63 @@ const handlePatientClick = (patientId: string) => {
 
 <style scoped>
 .patient-list {
-  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 1.5rem;
 }
 
 .header {
+  @apply glass-card p-6;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
 }
 
 h1 {
   margin: 0;
-  color: var(--color-text);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text, #0c1f2f);
 }
 
 button {
-  padding: 0.75rem 1.5rem;
-  background: var(--color-primary);
-  color: white;
-  border: none;
-  border-radius: 4px;
+  @apply glass-card px-6 py-3 border border-white/40 bg-white/30 backdrop-blur-xl;
   cursor: pointer;
+  font-weight: 500;
+  color: var(--color-text, #0c1f2f);
+  transition: all 0.2s;
+  background: linear-gradient(135deg, #1a7fd8 0%, #18b4a6 100%);
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(26, 127, 216, 0.3);
 }
 
 .search-bar {
-  margin-bottom: 2rem;
+  margin-bottom: 0;
 }
 
 .search-bar input {
+  @apply glass-card px-4 py-3 border border-white/40 bg-white/30 backdrop-blur-xl;
   width: 100%;
   max-width: 500px;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
   font-size: 1rem;
+  color: var(--color-text, #0c1f2f);
+  transition: all 0.2s;
+}
+
+.search-bar input:focus {
+  @apply bg-white/50 border-white/60;
+  outline: none;
+  box-shadow: 0 4px 16px rgba(26, 127, 216, 0.2);
+}
+
+.search-bar input::placeholder {
+  color: var(--color-text-secondary, #6b7d8f);
 }
 
 .patient-grid {
@@ -102,9 +124,10 @@ button {
 .loading,
 .error,
 .empty {
+  @apply glass-card;
   text-align: center;
-  padding: 2rem;
-  color: var(--color-text-secondary);
+  padding: 3rem;
+  color: var(--color-text-secondary, #6b7d8f);
 }
 </style>
 

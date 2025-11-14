@@ -102,16 +102,16 @@ function handleConfirm() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
   padding: 1rem;
 }
 
 .modal-content {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  @apply glass-card;
   width: 100%;
   max-width: 500px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
 .modal-header {
@@ -119,29 +119,28 @@ function handleConfirm() {
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .modal-title {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
-  color: #334155;
+  color: var(--color-text, #0c1f2f);
 }
 
 .modal-close {
-  padding: 0.5rem;
-  background: none;
-  border: none;
+  @apply glass-card p-2 border border-white/40 bg-white/30 backdrop-blur-xl;
   cursor: pointer;
-  color: #64748b;
-  border-radius: 4px;
+  color: var(--color-text-secondary, #6b7d8f);
+  border-radius: 8px;
   transition: all 0.2s;
 }
 
 .modal-close:hover {
-  background: #f1f5f9;
-  color: #334155;
+  @apply bg-white/50 border-white/60;
+  color: var(--color-text, #0c1f2f);
+  transform: translateY(-1px);
 }
 
 .modal-body {
@@ -151,13 +150,13 @@ function handleConfirm() {
 .warning-text {
   margin: 0 0 0.5rem 0;
   font-size: 1rem;
-  color: #334155;
+  color: var(--color-text, #0c1f2f);
 }
 
 .warning-subtitle {
   margin: 0 0 1.5rem 0;
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--color-text-secondary, #6b7d8f);
 }
 
 .form-group {
@@ -170,30 +169,31 @@ function handleConfirm() {
   margin-bottom: 0.5rem;
   font-size: 0.875rem;
   font-weight: 500;
-  color: #475569;
+  color: var(--color-text, #0c1f2f);
 }
 
 .form-input {
-  padding: 0.75rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  @apply glass-card px-4 py-3 border border-white/40 bg-white/30 backdrop-blur-xl;
   font-size: 0.875rem;
+  color: var(--color-text, #0c1f2f);
   transition: all 0.2s;
   font-family: inherit;
+  resize: vertical;
 }
 
 .form-input:focus {
+  @apply bg-white/50 border-white/60;
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 4px 16px rgba(26, 127, 216, 0.2);
+}
+
+.form-input::placeholder {
+  color: var(--color-text-secondary, #6b7d8f);
 }
 
 .error-message {
-  padding: 0.75rem;
-  background: #fee2e2;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
-  color: #dc2626;
+  @apply glass-card p-4 border border-red-200/50 bg-red-50/30 backdrop-blur-xl;
+  color: var(--color-error, #ef4444);
   font-size: 0.875rem;
   margin-bottom: 1rem;
 }
@@ -205,33 +205,32 @@ function handleConfirm() {
 }
 
 .btn-secondary {
-  padding: 0.75rem 1.5rem;
-  background: #f1f5f9;
-  color: #475569;
-  border: none;
-  border-radius: 8px;
+  @apply glass-card px-6 py-3 border border-white/40 bg-white/30 backdrop-blur-xl;
   cursor: pointer;
   font-weight: 500;
+  color: var(--color-text-secondary, #6b7d8f);
   transition: all 0.2s;
 }
 
 .btn-secondary:hover {
-  background: #e2e8f0;
+  @apply bg-white/50 border-white/60;
+  color: var(--color-text, #0c1f2f);
+  transform: translateY(-1px);
 }
 
 .btn-danger {
-  padding: 0.75rem 1.5rem;
-  background: #dc2626;
-  color: white;
-  border: none;
-  border-radius: 8px;
+  @apply glass-card px-6 py-3 border border-white/40 bg-white/30 backdrop-blur-xl;
   cursor: pointer;
   font-weight: 500;
+  color: white;
   transition: all 0.2s;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  border: 2px solid rgba(255, 255, 255, 0.5);
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #b91c1c;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
 }
 
 .btn-danger:disabled {

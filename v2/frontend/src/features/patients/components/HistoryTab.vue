@@ -233,23 +233,46 @@ function handleModalSuccess() {
   flex-direction: column;
 }
 
+.btn-primary {
+  @apply glass-card px-4 py-2 border border-white/40 bg-white/30 backdrop-blur-xl;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-weight: 500;
+  color: white;
+  transition: all 0.2s;
+  background: linear-gradient(135deg, #1a7fd8 0%, #18b4a6 100%);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  font-size: 0.875rem;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(26, 127, 216, 0.3);
+}
+
 .select-input,
 .input-search {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
+  @apply glass-card px-4 py-2 border border-white/40 bg-white/30 backdrop-blur-xl;
   font-size: 0.875rem;
+  color: var(--color-text, #0c1f2f);
+  transition: all 0.2s;
+}
+
+.select-input:focus,
+.input-search:focus {
+  @apply bg-white/50 border-white/60;
+  outline: none;
+  box-shadow: 0 4px 16px rgba(26, 127, 216, 0.2);
 }
 
 .input-search {
   min-width: 200px;
 }
 
-.glass-card {
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
+.input-search::placeholder {
+  color: var(--color-text-secondary, #6b7d8f);
 }
 </style>
 

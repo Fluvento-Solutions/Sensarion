@@ -178,41 +178,35 @@ function handleDeleteConfirm(reason: string) {
 }
 
 .btn-primary {
+  @apply glass-card px-6 py-3 border border-white/40 bg-white/30 backdrop-blur-xl;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 8px;
   cursor: pointer;
   font-weight: 500;
+  color: white;
   transition: all 0.2s;
+  background: linear-gradient(135deg, #1a7fd8 0%, #18b4a6 100%);
+  border: 2px solid rgba(255, 255, 255, 0.5);
 }
 
 .btn-primary:hover {
-  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(26, 127, 216, 0.3);
 }
 
 .btn-icon {
-  padding: 0.5rem;
-  background: none;
-  border: none;
+  @apply glass-card p-2 border border-white/40 bg-white/30 backdrop-blur-xl;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 8px;
   transition: all 0.2s;
+  color: var(--color-text-secondary, #6b7d8f);
 }
 
 .btn-icon:hover {
-  background: rgba(0, 0, 0, 0.05);
-}
-
-.glass-card {
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
+  @apply bg-white/50 border-white/60;
+  color: var(--color-text, #0c1f2f);
+  transform: translateY(-1px);
 }
 </style>
 

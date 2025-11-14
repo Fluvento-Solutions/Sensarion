@@ -40,28 +40,26 @@ function formatGender(gender: string): string {
 
 <style scoped>
 .patient-card {
-  background: white;
-  padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  @apply glass-card p-6;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: all 0.2s;
 }
 
 .patient-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 8px 24px rgba(26, 127, 216, 0.2);
+  background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.9), rgba(243, 246, 251, 0.9), rgba(236, 242, 248, 0.9));
 }
 
 .patient-name {
   font-size: 1.25rem;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--color-text, #0c1f2f);
   margin-bottom: 0.5rem;
 }
 
 .patient-info {
-  color: var(--color-text-secondary);
+  color: var(--color-text-secondary, #6b7d8f);
   font-size: 0.875rem;
 }
 
@@ -73,10 +71,14 @@ function formatGender(gender: string): string {
 }
 
 .tag {
-  background: var(--color-surface);
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  @apply glass-card px-3 py-1 border border-white/40 bg-white/30 backdrop-blur-xl;
   font-size: 0.75rem;
+  color: var(--color-text-secondary, #6b7d8f);
+  transition: all 0.2s;
+}
+
+.tag:hover {
+  @apply bg-white/50 border-white/60;
 }
 </style>
 

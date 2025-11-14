@@ -84,17 +84,18 @@ const handleEdit = () => {
 
 <style scoped>
 .patient-detail {
-  padding: 2rem;
-  height: 100%;
   display: flex;
   flex-direction: column;
+  height: 100%;
+  gap: 1.5rem;
 }
 
 .loading,
 .error {
+  @apply glass-card;
   text-align: center;
-  padding: 2rem;
-  color: var(--color-text-secondary);
+  padding: 3rem;
+  color: var(--color-text-secondary, #6b7d8f);
 }
 
 .patient-content {
@@ -105,21 +106,22 @@ const handleEdit = () => {
 }
 
 .header {
+  @apply glass-card p-6;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 0;
 }
 
 .header h1 {
   margin: 0 0 0.25rem 0;
-  color: var(--color-text);
+  color: var(--color-text, #0c1f2f);
   font-size: 1.75rem;
+  font-weight: 600;
 }
 
 .patient-id {
   margin: 0;
-  color: var(--color-text-secondary);
+  color: var(--color-text-secondary, #6b7d8f);
   font-size: 0.875rem;
 }
 
@@ -129,37 +131,35 @@ const handleEdit = () => {
 }
 
 .btn-primary {
-  padding: 0.75rem 1.5rem;
-  background: var(--color-primary);
-  color: white;
-  border: none;
-  border-radius: 8px;
+  @apply glass-card px-6 py-3 border border-white/40 bg-white/30 backdrop-blur-xl;
   cursor: pointer;
   font-weight: 500;
+  color: white;
   transition: all 0.2s;
+  background: linear-gradient(135deg, #1a7fd8 0%, #18b4a6 100%);
+  border: 2px solid rgba(255, 255, 255, 0.5);
 }
 
 .btn-primary:hover {
-  opacity: 0.9;
   transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(26, 127, 216, 0.3);
 }
 
 .tabs-container {
+  @apply glass-card;
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 }
 
 .tabs-nav {
   display: flex;
   gap: 0;
-  border-bottom: 2px solid #e2e8f0;
-  background: #f8fafc;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
   padding: 0 1rem;
 }
 
@@ -174,20 +174,22 @@ const handleEdit = () => {
   cursor: pointer;
   font-size: 0.875rem;
   font-weight: 500;
-  color: #64748b;
+  color: var(--color-text-secondary, #6b7d8f);
   transition: all 0.2s;
-  margin-bottom: -2px;
+  margin-bottom: -1px;
 }
 
 .tab-button:hover {
-  color: #334155;
-  background: rgba(59, 130, 246, 0.05);
+  color: var(--color-text, #0c1f2f);
+  background: rgba(26, 127, 216, 0.08);
+  backdrop-filter: blur(4px);
 }
 
 .tab-button.active {
-  color: #3b82f6;
-  border-bottom-color: #3b82f6;
-  background: white;
+  color: var(--color-primary, #1a7fd8);
+  border-bottom-color: var(--color-primary, #1a7fd8);
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(8px);
 }
 
 .tab-content {

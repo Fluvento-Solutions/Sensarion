@@ -52,29 +52,33 @@ const medicalTabs = [
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1.5rem;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  padding-bottom: 0.5rem;
 }
 
 .tab-button {
-  padding: 0.75rem 1.5rem;
-  background: none;
+  @apply glass-card px-6 py-3 border border-white/40 bg-white/30 backdrop-blur-xl;
   border: none;
   border-bottom: 3px solid transparent;
   cursor: pointer;
   font-size: 0.875rem;
   font-weight: 500;
-  color: #64748b;
+  color: var(--color-text-secondary, #6b7d8f);
   transition: all 0.2s;
-  margin-bottom: -2px;
+  margin-bottom: -3px;
 }
 
 .tab-button:hover {
-  color: #334155;
+  @apply bg-white/50 border-white/60;
+  color: var(--color-text, #0c1f2f);
+  transform: translateY(-1px);
 }
 
 .tab-button.active {
-  color: #3b82f6;
-  border-bottom-color: #3b82f6;
+  @apply bg-white/70 border-white/80;
+  color: var(--color-primary, #1a7fd8);
+  border-bottom-color: var(--color-primary, #1a7fd8);
+  box-shadow: 0 4px 16px rgba(26, 127, 216, 0.2);
 }
 
 .tab-content {

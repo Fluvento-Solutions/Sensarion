@@ -127,37 +127,46 @@ const handleCancel = () => {
 
 <style scoped>
 .patient-edit {
-  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 1.5rem;
   max-width: 800px;
   margin: 0 auto;
+  width: 100%;
 }
 
 .header {
+  @apply glass-card p-6;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
 }
 
 h1 {
   margin: 0;
-  color: var(--color-text);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text, #0c1f2f);
 }
 
 button {
-  padding: 0.75rem 1.5rem;
-  background: var(--color-primary);
-  color: white;
-  border: none;
-  border-radius: 4px;
+  @apply glass-card px-6 py-3 border border-white/40 bg-white/30 backdrop-blur-xl;
   cursor: pointer;
+  font-weight: 500;
+  color: white;
+  transition: all 0.2s;
+  background: linear-gradient(135deg, #1a7fd8 0%, #18b4a6 100%);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(26, 127, 216, 0.3);
 }
 
 .patient-form {
-  background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  @apply glass-card p-8;
 }
 
 .form-group {
@@ -167,17 +176,28 @@ button {
 label {
   display: block;
   margin-bottom: 0.5rem;
-  color: var(--color-text);
+  color: var(--color-text, #0c1f2f);
   font-weight: 500;
 }
 
 input,
 select {
+  @apply glass-card px-4 py-3 border border-white/40 bg-white/30 backdrop-blur-xl;
   width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
   font-size: 1rem;
+  color: var(--color-text, #0c1f2f);
+  transition: all 0.2s;
+}
+
+input:focus,
+select:focus {
+  @apply bg-white/50 border-white/60;
+  outline: none;
+  box-shadow: 0 4px 16px rgba(26, 127, 216, 0.2);
+}
+
+input::placeholder {
+  color: var(--color-text-secondary, #6b7d8f);
 }
 
 .form-actions {
@@ -188,15 +208,14 @@ select {
 }
 
 .form-actions button[type="button"] {
-  background: #6b7280;
+  background: rgba(107, 114, 128, 0.8);
+  backdrop-filter: blur(8px);
 }
 
 .error-message {
-  color: var(--color-error);
+  @apply glass-card p-4 border border-red-200/50 bg-red-50/30 backdrop-blur-xl;
+  color: var(--color-error, #ef4444);
   margin-bottom: 1rem;
-  padding: 0.75rem;
-  background: #fee;
-  border-radius: 4px;
 }
 </style>
 

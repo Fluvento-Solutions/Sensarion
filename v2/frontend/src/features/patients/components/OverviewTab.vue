@@ -100,12 +100,5 @@ function formatGender(gender: string): string {
   flex-direction: column;
   gap: 1rem;
 }
-
-.glass-card {
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
-}
 </style>
 
