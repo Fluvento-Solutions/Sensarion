@@ -120,7 +120,7 @@ async function main() {
       data: {
         tenantId: tenant.id,
         name: 'Hauptkalender',
-        type: 'general',
+        type: 'PERSONAL', // CalendarType enum: PERSONAL, ROOM, PURPOSE
         color: '#3b82f6',
         ownerId: user.id // Prisma User model has 'id', not 'userId'
       }
