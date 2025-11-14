@@ -332,10 +332,7 @@ function createEventAt(day: Date, hour: number) {
 }
 
 .header {
-  padding: 1.5rem;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  @apply glass-card p-6;
 }
 
 .icon-wrapper {
@@ -344,100 +341,87 @@ function createEventAt(day: Date, hour: number) {
   justify-content: center;
   width: 48px;
   height: 48px;
-  border-radius: 12px;
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
+  border-radius: 16px;
+  background: rgba(26, 127, 216, 0.12);
+  color: var(--color-primary, #1a7fd8);
+  backdrop-filter: blur(8px);
 }
 
 .title {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 600;
-  color: #334155;
+  color: var(--color-text, #0c1f2f);
 }
 
 .subtitle {
   margin: 0.25rem 0 0 0;
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--color-text-secondary, #6b7d8f);
+}
+
+.btn-icon,
+.btn-text {
+  @apply glass-card px-4 py-2 border border-white/40 bg-white/30 backdrop-blur-xl;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--color-text-secondary, #6b7d8f);
+  transition: all 0.2s;
 }
 
 .btn-icon {
   padding: 0.5rem;
-  background: rgba(255, 255, 255, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 8px;
-  cursor: pointer;
-  color: #64748b;
-  transition: all 0.2s;
 }
 
-.btn-icon:hover {
-  background: rgba(255, 255, 255, 0.7);
-  color: #334155;
-}
-
-.btn-text {
-  padding: 0.5rem 1rem;
-  background: rgba(255, 255, 255, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 500;
-  color: #334155;
-  transition: all 0.2s;
-}
-
+.btn-icon:hover,
 .btn-text:hover {
-  background: rgba(255, 255, 255, 0.7);
+  @apply bg-white/50 border-white/60;
+  color: var(--color-text, #0c1f2f);
+  transform: translateY(-1px);
 }
 
 .view-selector {
   display: flex;
   gap: 0.5rem;
-  padding: 0 1.5rem;
+  padding: 0;
 }
 
 .view-button {
-  padding: 0.75rem 1.5rem;
-  background: rgba(255, 255, 255, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 8px;
+  @apply glass-card px-6 py-3 border border-white/40 bg-white/30 backdrop-blur-xl;
   cursor: pointer;
   font-weight: 500;
-  color: #64748b;
+  color: var(--color-text-secondary, #6b7d8f);
   transition: all 0.2s;
 }
 
 .view-button:hover {
-  background: rgba(255, 255, 255, 0.7);
+  @apply bg-white/50 border-white/60;
+  color: var(--color-text, #0c1f2f);
+  transform: translateY(-1px);
 }
 
 .view-button.active {
-  background: white;
-  border-color: #3b82f6;
-  color: #3b82f6;
-  box-shadow: 0 4px 12px rgba(13, 86, 132, 0.15);
+  @apply bg-white/70 border-white/80;
+  color: var(--color-primary, #1a7fd8);
+  box-shadow: 0 4px 16px rgba(26, 127, 216, 0.2);
 }
 
 .calendar-content {
   flex: 1;
   overflow-y: auto;
-  padding: 0 1.5rem 1.5rem;
+  padding: 0;
 }
 
 .calendar-grid {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  @apply glass-card overflow-hidden;
 }
 
 .weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.5);
 }
 
 .weekday {
@@ -445,31 +429,38 @@ function createEventAt(day: Date, hour: number) {
   text-align: center;
   font-weight: 600;
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--color-text-secondary, #6b7d8f);
   text-transform: uppercase;
 }
 
 .days-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .day-cell {
   min-height: 120px;
-  border-right: 1px solid #e2e8f0;
-  border-bottom: 1px solid #e2e8f0;
-  padding: 0.5rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.3);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+  transition: background 0.2s;
+}
+
+.day-cell:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .day-cell.other-month {
-  background: #f8fafc;
-  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-secondary, #8fa3b8);
 }
 
 .day-number {
   font-weight: 600;
   margin-bottom: 0.5rem;
-  color: #334155;
+  color: var(--color-text, #0c1f2f);
 }
 
 .day-events {
@@ -479,14 +470,22 @@ function createEventAt(day: Date, hour: number) {
 }
 
 .event-item {
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  padding: 0.375rem 0.625rem;
+  border-radius: 8px;
   font-size: 0.75rem;
   color: white;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s;
+}
+
+.event-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .week-header,
@@ -496,48 +495,55 @@ function createEventAt(day: Date, hour: number) {
 }
 
 .time-column {
-  background: #f8fafc;
-  border-right: 2px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(8px);
+  border-right: 1px solid rgba(255, 255, 255, 0.4);
 }
 
 .day-column {
-  border-right: 1px solid #e2e8f0;
+  border-right: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .day-column.today {
-  background: rgba(59, 130, 246, 0.05);
+  background: rgba(26, 127, 216, 0.1);
+  backdrop-filter: blur(8px);
 }
 
 .day-header {
   padding: 1rem;
   text-align: center;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
 }
 
 .day-name {
   font-weight: 600;
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--color-text-secondary, #6b7d8f);
   text-transform: uppercase;
 }
 
 .day-date {
   font-size: 1.25rem;
   font-weight: 600;
-  color: #334155;
+  color: var(--color-text, #0c1f2f);
   margin-top: 0.25rem;
 }
 
 .hour-cell {
   min-height: 60px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   padding: 0.5rem;
   position: relative;
   cursor: pointer;
+  transition: background 0.2s;
 }
 
 .hour-cell:hover {
-  background: rgba(59, 130, 246, 0.05);
+  background: rgba(26, 127, 216, 0.08);
+  backdrop-filter: blur(4px);
 }
 
 .event-block {
@@ -545,24 +551,33 @@ function createEventAt(day: Date, hour: number) {
   left: 0.5rem;
   right: 0.5rem;
   padding: 0.5rem;
-  border-radius: 4px;
+  border-radius: 8px;
   font-size: 0.75rem;
   color: white;
   cursor: pointer;
   z-index: 1;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s;
+}
+
+.event-block:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .day-header-large {
   padding: 1.5rem;
   text-align: center;
-  background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
 }
 
 .day-name-large {
   font-size: 1.5rem;
   font-weight: 600;
-  color: #334155;
+  color: var(--color-text, #0c1f2f);
 }
 
 .day-body {
@@ -577,21 +592,22 @@ function createEventAt(day: Date, hour: number) {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: #3b82f6;
+  background: linear-gradient(135deg, #1a7fd8 0%, #18b4a6 100%);
   color: white;
-  border: none;
+  border: 2px solid rgba(255, 255, 255, 0.5);
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 8px 24px rgba(26, 127, 216, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
   z-index: 100;
+  backdrop-filter: blur(8px);
 }
 
 .fab:hover {
-  transform: scale(1.1);
-  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.5);
+  transform: scale(1.1) translateY(-2px);
+  box-shadow: 0 12px 32px rgba(26, 127, 216, 0.4);
 }
 </style>
 

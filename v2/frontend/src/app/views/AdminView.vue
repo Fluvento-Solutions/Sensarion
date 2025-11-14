@@ -84,10 +84,7 @@ const tabs = [
 }
 
 .header {
-  padding: 1.5rem;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  @apply glass-card p-6;
 }
 
 .icon-wrapper {
@@ -96,29 +93,30 @@ const tabs = [
   justify-content: center;
   width: 48px;
   height: 48px;
-  border-radius: 12px;
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
+  border-radius: 16px;
+  background: rgba(26, 127, 216, 0.12);
+  color: var(--color-primary, #1a7fd8);
+  backdrop-filter: blur(8px);
 }
 
 .title {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 600;
-  color: #334155;
+  color: var(--color-text, #0c1f2f);
 }
 
 .subtitle {
   margin: 0.25rem 0 0 0;
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--color-text-secondary, #6b7d8f);
 }
 
 .tabs-nav {
   display: flex;
   gap: 0.5rem;
   overflow-x: auto;
-  padding: 0 1.5rem;
+  padding: 0;
   scrollbar-width: none;
 }
 
@@ -127,46 +125,45 @@ const tabs = [
 }
 
 .tab-button {
+  @apply glass-card px-6 py-3 border border-white/40 bg-white/30 backdrop-blur-xl;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  background: rgba(255, 255, 255, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 12px;
   cursor: pointer;
   font-size: 0.875rem;
   font-weight: 500;
-  color: #64748b;
+  color: var(--color-text-secondary, #6b7d8f);
   white-space: nowrap;
   transition: all 0.2s;
 }
 
 .tab-button:hover {
-  background: rgba(255, 255, 255, 0.7);
-  color: #334155;
+  @apply bg-white/50 border-white/60;
+  color: var(--color-text, #0c1f2f);
+  transform: translateY(-1px);
 }
 
 .tab-button.active {
-  background: white;
-  border-color: #3b82f6;
-  color: #3b82f6;
-  box-shadow: 0 4px 12px rgba(13, 86, 132, 0.15);
+  @apply bg-white/70 border-white/80;
+  color: var(--color-primary, #1a7fd8);
+  box-shadow: 0 4px 16px rgba(26, 127, 216, 0.2);
 }
 
 .tab-content {
   flex: 1;
   overflow-y: auto;
-  padding: 0 1.5rem 1.5rem;
+  padding: 0;
 }
 
 .placeholder {
+  @apply glass-card;
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 400px;
+  padding: 3rem;
   text-align: center;
-  color: #64748b;
+  color: var(--color-text-secondary, #6b7d8f);
 }
 </style>
 

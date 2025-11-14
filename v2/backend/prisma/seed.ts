@@ -92,6 +92,19 @@ async function main() {
   
   console.log('✅ Activated all modules for tenant');
   
+  // 5. Create Default Calendar
+  const defaultCalendar = await prisma.calendar.create({
+    data: {
+      tenantId: tenant.id,
+      name: 'Hauptkalender',
+      type: 'general',
+      color: '#3b82f6',
+      ownerId: user.id // Prisma User model has 'id', not 'userId'
+    }
+  });
+  
+  console.log('✅ Created default calendar:', defaultCalendar.name);
+  
   console.log('✅ Seeding completed!');
 }
 
