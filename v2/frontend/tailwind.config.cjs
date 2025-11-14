@@ -41,6 +41,18 @@ module.exports = {
       }
     }
   },
-  plugins: []
+  plugins: [
+    function({ addComponents, theme }) {
+      addComponents({
+        '.glass-card': {
+          overflow: 'hidden',
+          borderRadius: theme('borderRadius.3xl'),
+          border: '1px solid rgba(255, 255, 255, 0.55)',
+          background: 'linear-gradient(to bottom right, white, #f3f6fb, #ecf2f8)',
+          backdropFilter: 'blur(2rem)',
+        }
+      });
+    }
+  ]
 };
 
