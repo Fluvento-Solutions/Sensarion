@@ -21,6 +21,7 @@
     "db:migrate:dry": "prisma migrate dev --create-only",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "seed": "npm run db:seed",
     "dep:scan": "npm audit --audit-level=moderate"
   },
   "dependencies": {

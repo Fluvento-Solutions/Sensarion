@@ -15,95 +15,120 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding database...');
   
-  // 1. Create Tenant
-  const tenant = await prisma.tenant.create({
-    data: {
-      name: 'Praxis Mustermann',
-      code: 'praxis-mustermann'
-    }
+  // 1. Create or get Tenant
+  let tenant = await prisma.tenant.findUnique({
+    where: { code: 'praxis-mustermann' }
   });
   
-  console.log('✅ Created tenant:', tenant.code);
+  if (!tenant) {
+    tenant = await prisma.tenant.create({
+      data: {
+        name: 'Praxis Mustermann',
+        code: 'praxis-mustermann'
+      }
+    });
+    console.log('✅ Created tenant:', tenant.code);
+  } else {
+    console.log('✅ Tenant already exists:', tenant.code);
+  }
   
-  // 2. Create Modules
-  const modules = await Promise.all([
-    prisma.module.create({
-      data: {
-        code: 'patients',
-        name: 'Patientenverwaltung',
-        description: 'Verwaltung von Patienten, Vitalwerten, Diagnosen'
+  // 2. Create or get Modules
+  const moduleData = [
+    { code: 'patients', name: 'Patientenverwaltung', description: 'Verwaltung von Patienten, Vitalwerten, Diagnosen' },
+    { code: 'calendar', name: 'Terminverwaltung', description: 'Verwaltung von Terminen und Räumen' },
+    { code: 'exports', name: 'Datenexport', description: 'Export von Daten (JSON/FHIR)' },
+    { code: 'ai-assistant', name: 'KI-Assistent', description: 'KI-Unterstützung für Textverbesserung und Analyse' }
+  ];
+  
+  const modules = await Promise.all(
+    moduleData.map(async (data) => {
+      const existing = await prisma.module.findUnique({
+        where: { code: data.code }
+      });
+      if (existing) {
+        return existing;
       }
-    }),
-    prisma.module.create({
-      data: {
-        code: 'calendar',
-        name: 'Terminverwaltung',
-        description: 'Verwaltung von Terminen und Räumen'
-      }
-    }),
-    prisma.module.create({
-      data: {
-        code: 'exports',
-        name: 'Datenexport',
-        description: 'Export von Daten (JSON/FHIR)'
-      }
-    }),
-    prisma.module.create({
-      data: {
-        code: 'ai-assistant',
-        name: 'KI-Assistent',
-        description: 'KI-Unterstützung für Textverbesserung und Analyse'
-      }
+      return prisma.module.create({ data });
     })
-  ]);
+  );
   
-  console.log('✅ Created modules:', modules.map(m => m.code).join(', '));
+  console.log('✅ Modules ready:', modules.map(m => m.code).join(', '));
   
-  // 3. Create User (Admin)
-  const passwordHash = await bcrypt.hash('admin123', 10);
-  const user = await prisma.user.create({
-    data: {
+  // 3. Create or get User (Admin)
+  let user = await prisma.user.findFirst({
+    where: {
       tenantId: tenant.id,
-      email: 'admin@praxis-mustermann.local',
-      passwordHash,
-      displayName: 'Admin',
-      shortName: 'Admin',
-      roles: ['admin', 'physician']
+      email: 'admin@praxis-mustermann.local'
     }
   });
   
-  console.log('✅ Created user:', user.email);
+  if (!user) {
+    const passwordHash = await bcrypt.hash('admin123', 10);
+    user = await prisma.user.create({
+      data: {
+        tenantId: tenant.id,
+        email: 'admin@praxis-mustermann.local',
+        passwordHash,
+        displayName: 'Admin',
+        shortName: 'Admin',
+        roles: ['admin', 'physician']
+      }
+    });
+    console.log('✅ Created user:', user.email);
+  } else {
+    console.log('✅ User already exists:', user.email);
+  }
   
   // 4. Activate Modules for Tenant
   await Promise.all(
-    modules.map(module =>
-      prisma.tenantModule.create({
-        data: {
-          tenantId: tenant.id,
-          moduleId: module.id,
-          plan: 'premium',
-          status: 'active',
-          validFrom: new Date(),
-          validTo: null
+    modules.map(async (module) => {
+      const existing = await prisma.tenantModule.findUnique({
+        where: {
+          tenantId_moduleId: {
+            tenantId: tenant.id,
+            moduleId: module.id
+          }
         }
-      })
-    )
+      });
+      if (!existing) {
+        await prisma.tenantModule.create({
+          data: {
+            tenantId: tenant.id,
+            moduleId: module.id,
+            plan: 'premium',
+            status: 'active',
+            validFrom: new Date(),
+            validTo: null
+          }
+        });
+      }
+    })
   );
   
-  console.log('✅ Activated all modules for tenant');
+  console.log('✅ Modules activated for tenant');
   
-  // 5. Create Default Calendar
-  const defaultCalendar = await prisma.calendar.create({
-    data: {
+  // 5. Create or get Default Calendar
+  let defaultCalendar = await prisma.calendar.findFirst({
+    where: {
       tenantId: tenant.id,
-      name: 'Hauptkalender',
-      type: 'general',
-      color: '#3b82f6',
-      ownerId: user.id // Prisma User model has 'id', not 'userId'
+      name: 'Hauptkalender'
     }
   });
   
-  console.log('✅ Created default calendar:', defaultCalendar.name);
+  if (!defaultCalendar) {
+    defaultCalendar = await prisma.calendar.create({
+      data: {
+        tenantId: tenant.id,
+        name: 'Hauptkalender',
+        type: 'general',
+        color: '#3b82f6',
+        ownerId: user.id // Prisma User model has 'id', not 'userId'
+      }
+    });
+    console.log('✅ Created default calendar:', defaultCalendar.name);
+  } else {
+    console.log('✅ Default calendar already exists:', defaultCalendar.name);
+  }
   
   console.log('✅ Seeding completed!');
 }
