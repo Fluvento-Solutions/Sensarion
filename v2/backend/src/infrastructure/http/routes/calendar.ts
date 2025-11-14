@@ -95,7 +95,7 @@ export async function calendarRoutes(fastify: FastifyInstance): Promise<void> {
         roomId: dto.roomId,
         purpose: dto.purpose,
         color: dto.color || '#3b82f6',
-        ownerId: user.id
+        ownerId: user.userId
       },
       include: {
         owner: {
@@ -425,7 +425,7 @@ export async function calendarRoutes(fastify: FastifyInstance): Promise<void> {
         patientId: dto.patientId,
         recurrenceRule: dto.recurrenceRule,
         recurrenceEndDate: dto.recurrenceEndDate ? new Date(dto.recurrenceEndDate) : null,
-        createdBy: user.id
+        createdBy: user.userId
       },
       include: {
         calendar: {
