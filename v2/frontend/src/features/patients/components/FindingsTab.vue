@@ -38,40 +38,91 @@
       </div>
     </div>
 
-    <!-- Modal (TODO: Implementieren) -->
+    <!-- Finding Modal -->
+    <FindingModal
+      :open="showModal"
+      :patient-id="patientId"
+      :finding="editingFinding"
+      @close="handleCloseModal"
+      @success="handleModalSuccess"
+    />
+
+    <!-- Delete Modal -->
+    <DeleteModal
+      :open="showDeleteModal"
+      title="Befund löschen"
+      :item-name="deletingFinding?.text || ''"
+      @close="showDeleteModal = false"
+      @confirm="handleDeleteConfirm"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useQuery } from '@tanstack/vue-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query';
 import { PhPlus, PhPencil, PhTrash } from '@phosphor-icons/vue';
 import { patientApi } from '@/services/api';
+import FindingModal from './FindingModal.vue';
+import DeleteModal from '@/shared/components/DeleteModal.vue';
 
 const props = defineProps<{
   patientId: string;
 }>();
 
+const queryClient = useQueryClient();
 const showModal = ref(false);
+const showDeleteModal = ref(false);
+const editingFinding = ref<any | null>(null);
+const deletingFinding = ref<any | null>(null);
 
 const { data: findings = [], isLoading, isError, error } = useQuery({
   queryKey: ['patient-findings', props.patientId],
   queryFn: () => patientApi.getFindings(props.patientId)
 });
 
+const deleteMutation = useMutation({
+  mutationFn: ({ findingId, reason }: { findingId: string; reason: string }) =>
+    patientApi.deleteFinding(props.patientId, findingId, reason),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['patient-findings', props.patientId] });
+    showDeleteModal.value = false;
+    deletingFinding.value = null;
+  },
+  onError: (err) => {
+    alert(err instanceof Error ? err.message : 'Fehler beim Löschen des Befunds');
+  }
+});
+
 function formatDate(date: string): string {
   return new Date(date).toLocaleDateString('de-DE');
 }
 
+function handleCloseModal() {
+  showModal.value = false;
+  editingFinding.value = null;
+}
+
+function handleModalSuccess() {
+  // Modal wird bereits geschlossen
+}
+
 function editFinding(finding: any) {
-  // TODO: Implementieren
-  console.log('Edit finding', finding);
+  editingFinding.value = finding;
+  showModal.value = true;
 }
 
 function deleteFinding(finding: any) {
-  if (!confirm('Möchten Sie diesen Befund wirklich löschen?')) return;
-  // TODO: Implementieren
-  console.log('Delete finding', finding);
+  deletingFinding.value = finding;
+  showDeleteModal.value = true;
+}
+
+function handleDeleteConfirm(reason: string) {
+  if (!deletingFinding.value || !reason.trim()) {
+    alert('Bitte geben Sie einen Grund für die Löschung an');
+    return;
+  }
+  deleteMutation.mutate({ findingId: deletingFinding.value.id, reason: reason.trim() });
 }
 </script>
 

@@ -1,0 +1,336 @@
+<template>
+  <Teleport to="body">
+    <div
+      v-if="open"
+      class="modal-overlay"
+      @click.self="handleClose"
+    >
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">{{ isEdit ? 'Allergie bearbeiten' : 'Allergie hinzufügen' }}</h3>
+          <button @click="handleClose" class="modal-close">
+            <PhX :size="20" weight="regular" />
+          </button>
+        </div>
+
+        <form @submit.prevent="handleSubmit" class="modal-body">
+          <div class="form-group">
+            <label>Substanz *</label>
+            <input
+              v-model="form.substance"
+              type="text"
+              placeholder="z.B. Penicillin"
+              class="form-input"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label>Schweregrad *</label>
+            <select v-model="form.severity" class="form-input" required>
+              <option value="">Bitte wählen</option>
+              <option value="leicht">Leicht</option>
+              <option value="mittel">Mittel</option>
+              <option value="schwer">Schwer</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Notizen</label>
+            <textarea
+              v-model="form.notes"
+              rows="3"
+              placeholder="Zusätzliche Informationen"
+              class="form-input"
+            />
+          </div>
+
+          <div v-if="isEdit" class="form-group">
+            <label>Grund für Änderung *</label>
+            <textarea
+              v-model="reason"
+              rows="2"
+              placeholder="Bitte geben Sie einen Grund für die Änderung an"
+              class="form-input"
+              required
+            />
+          </div>
+
+          <div v-if="error" class="error-message">
+            {{ error }}
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" @click="handleClose" class="btn-secondary">
+              Abbrechen
+            </button>
+            <button type="submit" :disabled="isSubmitting" class="btn-primary">
+              {{ isSubmitting ? 'Speichern...' : isEdit ? 'Änderungen speichern' : 'Allergie hinzufügen' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </Teleport>
+</template>
+
+<script setup lang="ts">
+import { ref, watch, computed } from 'vue';
+import { PhX } from '@phosphor-icons/vue';
+import { useMutation, useQueryClient } from '@tanstack/vue-query';
+import { patientApi } from '@/services/api';
+
+const props = defineProps<{
+  open: boolean;
+  patientId: string;
+  allergy?: any | null;
+}>();
+
+const emit = defineEmits<{
+  (event: 'close'): void;
+  (event: 'success'): void;
+}>();
+
+const queryClient = useQueryClient();
+const isEdit = computed(() => !!props.allergy);
+
+const form = ref({
+  substance: '',
+  severity: '' as 'leicht' | 'mittel' | 'schwer' | '',
+  notes: ''
+});
+
+const reason = ref('');
+const error = ref<string | null>(null);
+
+watch(() => props.allergy, (allergy) => {
+  if (allergy) {
+    form.value = {
+      substance: allergy.substance || '',
+      severity: allergy.severity || '',
+      notes: allergy.notes || ''
+    };
+  } else {
+    form.value = {
+      substance: '',
+      severity: '',
+      notes: ''
+    };
+    reason.value = '';
+  }
+}, { immediate: true });
+
+watch(() => props.open, (open) => {
+  if (!open) {
+    error.value = null;
+    if (!isEdit.value) {
+      form.value = {
+        substance: '',
+        severity: '',
+        notes: ''
+      };
+    }
+  }
+});
+
+const createMutation = useMutation({
+  mutationFn: (data: any) => patientApi.createAllergy(props.patientId, data),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['patient-allergies', props.patientId] });
+    emit('success');
+    handleClose();
+  },
+  onError: (err) => {
+    error.value = err instanceof Error ? err.message : 'Fehler beim Erstellen der Allergie';
+  }
+});
+
+const updateMutation = useMutation({
+  mutationFn: ({ allergyId, data }: { allergyId: string; data: any }) =>
+    patientApi.updateAllergy(props.patientId, allergyId, data),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['patient-allergies', props.patientId] });
+    emit('success');
+    handleClose();
+  },
+  onError: (err) => {
+    error.value = err instanceof Error ? err.message : 'Fehler beim Aktualisieren der Allergie';
+  }
+});
+
+const isSubmitting = computed(() => createMutation.isPending.value || updateMutation.isPending.value);
+
+function handleClose() {
+  emit('close');
+}
+
+function handleSubmit() {
+  error.value = null;
+
+  if (!form.value.substance.trim() || !form.value.severity) {
+    error.value = 'Bitte füllen Sie alle Pflichtfelder aus';
+    return;
+  }
+
+  if (isEdit.value) {
+    if (!reason.value.trim()) {
+      error.value = 'Bitte geben Sie einen Grund für die Änderung an';
+      return;
+    }
+
+    updateMutation.mutate({
+      allergyId: props.allergy!.id,
+      data: {
+        substance: form.value.substance.trim(),
+        severity: form.value.severity,
+        notes: form.value.notes.trim() || undefined,
+        reason: reason.value.trim()
+      }
+    });
+  } else {
+    createMutation.mutate({
+      substance: form.value.substance.trim(),
+      severity: form.value.severity,
+      notes: form.value.notes.trim() || undefined
+    });
+  }
+}
+</script>
+
+<style scoped>
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 1rem;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.modal-close {
+  padding: 0.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #475569;
+}
+
+.form-input {
+  padding: 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.error-message {
+  padding: 0.75rem;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.btn-secondary {
+  padding: 0.75rem 1.5rem;
+  background: #f1f5f9;
+  color: #475569;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  background: #e2e8f0;
+}
+
+.btn-primary {
+  padding: 0.75rem 1.5rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+</style>
+

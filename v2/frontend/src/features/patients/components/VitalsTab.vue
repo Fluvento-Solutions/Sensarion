@@ -76,15 +76,33 @@
       </div>
     </div>
 
-    <!-- Vital Modal (TODO: Implementieren) -->
+    <!-- Vital Modal -->
+    <VitalModal
+      :open="showVitalModal"
+      :patient-id="patientId"
+      :vital="editingVital"
+      @close="handleCloseModal"
+      @success="handleModalSuccess"
+    />
+
+    <!-- Delete Modal -->
+    <DeleteModal
+      :open="showDeleteModal"
+      title="Vitalwerte löschen"
+      :item-name="deletingVital?.recordedAt ? formatDate(deletingVital.recordedAt) : ''"
+      @close="showDeleteModal = false"
+      @confirm="handleDeleteConfirm"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref } from 'vue';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query';
 import { PhPlus, PhPencil, PhTrash } from '@phosphor-icons/vue';
 import { patientApi } from '@/services/api';
+import VitalModal from './VitalModal.vue';
+import DeleteModal from '@/shared/components/DeleteModal.vue';
 
 const props = defineProps<{
   patientId: string;
@@ -92,10 +110,28 @@ const props = defineProps<{
 
 const queryClient = useQueryClient();
 const showVitalModal = ref(false);
+const showDeleteModal = ref(false);
+const editingVital = ref<any | null>(null);
+const deletingVital = ref<any | null>(null);
+const deleteReason = ref('');
 
 const { data: vitals = [], isLoading, isError, error } = useQuery({
   queryKey: ['patient-vitals', props.patientId],
   queryFn: () => patientApi.getVitals(props.patientId)
+});
+
+const deleteMutation = useMutation({
+  mutationFn: ({ vitalId, reason }: { vitalId: string; reason: string }) =>
+    patientApi.deleteVital(props.patientId, vitalId, reason),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['patient-vitals', props.patientId] });
+    showDeleteModal.value = false;
+    deletingVital.value = null;
+    deleteReason.value = '';
+  },
+  onError: (err) => {
+    alert(err instanceof Error ? err.message : 'Fehler beim Löschen der Vitalwerte');
+  }
 });
 
 function formatDate(date: string): string {
@@ -106,15 +142,32 @@ function formatTime(date: string): string {
   return new Date(date).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 }
 
+function handleCloseModal() {
+  showVitalModal.value = false;
+  editingVital.value = null;
+}
+
+function handleModalSuccess() {
+  // Modal wird bereits geschlossen, nur Cache invalidieren
+}
+
 function editVital(vital: any) {
-  // TODO: Implementieren
-  console.log('Edit vital', vital);
+  editingVital.value = vital;
+  showVitalModal.value = true;
 }
 
 function deleteVital(vital: any) {
-  if (!confirm('Möchten Sie diese Vitalwerte wirklich löschen?')) return;
-  // TODO: Implementieren
-  console.log('Delete vital', vital);
+  deletingVital.value = vital;
+  deleteReason.value = '';
+  showDeleteModal.value = true;
+}
+
+function handleDeleteConfirm(reason: string) {
+  if (!deletingVital.value || !reason.trim()) {
+    alert('Bitte geben Sie einen Grund für die Löschung an');
+    return;
+  }
+  deleteMutation.mutate({ vitalId: deletingVital.value.id, reason: reason.trim() });
 }
 </script>
 

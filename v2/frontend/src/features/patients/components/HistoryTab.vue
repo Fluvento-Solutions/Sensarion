@@ -3,6 +3,14 @@
     <div class="flex justify-between items-center mb-4">
       <h3 class="text-lg font-semibold text-steel-700">Verlauf</h3>
       <div class="flex gap-2">
+        <button @click="showNoteModal = true" class="btn-primary">
+          <PhPlus :size="16" weight="regular" />
+          <span>Notiz</span>
+        </button>
+        <button @click="showEncounterModal = true" class="btn-primary">
+          <PhPlus :size="16" weight="regular" />
+          <span>Kontakt</span>
+        </button>
         <select v-model="filterType" class="select-input">
           <option value="all">Alle</option>
           <option value="note">Notizen</option>
@@ -46,19 +54,40 @@
         Keine Einträge gefunden
       </div>
     </div>
+
+    <!-- Note Modal -->
+    <NoteModal
+      :open="showNoteModal"
+      :patient-id="patientId"
+      @close="showNoteModal = false"
+      @success="handleModalSuccess"
+    />
+
+    <!-- Encounter Modal -->
+    <EncounterModal
+      :open="showEncounterModal"
+      :patient-id="patientId"
+      @close="showEncounterModal = false"
+      @success="handleModalSuccess"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
-import { useQuery } from '@tanstack/vue-query';
+import { ref, computed } from 'vue';
+import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { PhFileText, PhCalendar, PhCheckCircle, PhPencilSimple, PhTrashSimple, PhPlus, PhXCircle } from '@phosphor-icons/vue';
 import { patientApi } from '@/services/api';
+import NoteModal from './NoteModal.vue';
+import EncounterModal from './EncounterModal.vue';
 
 const props = defineProps<{
   patientId: string;
 }>();
 
+const queryClient = useQueryClient();
+const showNoteModal = ref(false);
+const showEncounterModal = ref(false);
 const filterType = ref<'all' | 'note' | 'encounter' | 'audit'>('all');
 const searchQuery = ref('');
 
@@ -191,6 +220,10 @@ function formatDateTime(date: string): string {
     hour: '2-digit',
     minute: '2-digit'
   });
+}
+
+function handleModalSuccess() {
+  // Cache wird bereits invalidiert
 }
 </script>
 

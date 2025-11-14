@@ -354,6 +354,26 @@ Dieses Dokument listet alle erstellten Artefakte für Sensarion v2 auf.
 - ✅ `frontend/src/services/api.ts` - calendarApi hinzugefügt
 - ✅ `frontend/package.json` - date-fns Dependency hinzugefügt
 
+### CRUD-Modals für Patienten-Subressourcen
+
+#### Modals
+- ✅ `frontend/src/features/patients/components/VitalModal.vue` - Vitalwerte-Modal (Create/Edit)
+- ✅ `frontend/src/features/patients/components/AllergyModal.vue` - Allergie-Modal (Create/Edit)
+- ✅ `frontend/src/features/patients/components/MedicationModal.vue` - Medikation-Modal (Create/Edit)
+- ✅ `frontend/src/features/patients/components/DiagnosisModal.vue` - Diagnose-Modal (Create/Edit)
+- ✅ `frontend/src/features/patients/components/FindingModal.vue` - Befund-Modal (Create/Edit)
+- ✅ `frontend/src/features/patients/components/NoteModal.vue` - Notiz-Modal (Create)
+- ✅ `frontend/src/features/patients/components/EncounterModal.vue` - Kontakt-Modal (Create)
+- ✅ `frontend/src/shared/components/DeleteModal.vue` - Wiederverwendbares Lösch-Modal
+
+#### Tab-Integrationen
+- ✅ `frontend/src/features/patients/components/VitalsTab.vue` - VitalModal und DeleteModal integriert
+- ✅ `frontend/src/features/patients/components/AllergiesTab.vue` - AllergyModal und DeleteModal integriert
+- ✅ `frontend/src/features/patients/components/MedicationsTab.vue` - MedicationModal und DeleteModal integriert
+- ✅ `frontend/src/features/patients/components/DiagnosesTab.vue` - DiagnosisModal und DeleteModal integriert
+- ✅ `frontend/src/features/patients/components/FindingsTab.vue` - FindingModal und DeleteModal integriert
+- ✅ `frontend/src/features/patients/components/HistoryTab.vue` - NoteModal und EncounterModal integriert
+
 ## Zusammenfassung
 
 **Erstellt**: 50+ Dateien (Dokumentation, Backend-Struktur, Frontend-Struktur, CI/CD)
@@ -361,15 +381,19 @@ Dieses Dokument listet alle erstellten Artefakte für Sensarion v2 auf.
 **UI Migration**: 10+ Dateien (Layout-Komponenten, Views, Styling)
 
 **Feature-Implementierungen**: 
-- Patienten-Modul: 8 Backend-Routes + 8 Frontend-Komponenten
+- Patienten-Modul: 8 Backend-Routes + 8 Frontend-Komponenten + 8 CRUD-Modals
 - Admin-Modul: 1 Backend-Route + 3 Frontend-Komponenten
 - Kalender-Modul: 1 Backend-Route + 1 Frontend-View + 3 Prisma-Modelle
 
+**CRUD-Modals**: 
+- Vitalwerte, Allergien, Medikationen, Diagnosen, Befunde (Create/Edit/Delete)
+- Notizen, Kontakte (Create)
+- Wiederverwendbares DeleteModal für alle Lösch-Operationen
+
 **TODO**: 
-- CRUD-Modals für Patienten-Subressourcen
 - CRUD-Modals für Admin-Benutzer
 - Event-Erstellung/Editierung im Kalender
 - Teams, Räume, Usertypen-Verwaltung
 
-**Status**: Foundation gelegt, UI migriert, Kern-Features implementiert
+**Status**: Foundation gelegt, UI migriert, Kern-Features implementiert, Patienten-CRUD vollständig
 

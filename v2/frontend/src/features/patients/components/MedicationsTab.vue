@@ -55,36 +55,87 @@
       </div>
     </div>
 
-    <!-- Modal (TODO: Implementieren) -->
+    <!-- Medication Modal -->
+    <MedicationModal
+      :open="showModal"
+      :patient-id="patientId"
+      :medication="editingMedication"
+      @close="handleCloseModal"
+      @success="handleModalSuccess"
+    />
+
+    <!-- Delete Modal -->
+    <DeleteModal
+      :open="showDeleteModal"
+      title="Medikation löschen"
+      :item-name="deletingMedication?.name || ''"
+      @close="showDeleteModal = false"
+      @confirm="handleDeleteConfirm"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useQuery } from '@tanstack/vue-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query';
 import { PhPlus, PhPencil, PhTrash } from '@phosphor-icons/vue';
 import { patientApi } from '@/services/api';
+import MedicationModal from './MedicationModal.vue';
+import DeleteModal from '@/shared/components/DeleteModal.vue';
 
 const props = defineProps<{
   patientId: string;
 }>();
 
+const queryClient = useQueryClient();
 const showModal = ref(false);
+const showDeleteModal = ref(false);
+const editingMedication = ref<any | null>(null);
+const deletingMedication = ref<any | null>(null);
 
 const { data: medications = [], isLoading, isError, error } = useQuery({
   queryKey: ['patient-medications', props.patientId],
   queryFn: () => patientApi.getMedications(props.patientId)
 });
 
+const deleteMutation = useMutation({
+  mutationFn: ({ medicationId, reason }: { medicationId: string; reason: string }) =>
+    patientApi.deleteMedication(props.patientId, medicationId, reason),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['patient-medications', props.patientId] });
+    showDeleteModal.value = false;
+    deletingMedication.value = null;
+  },
+  onError: (err) => {
+    alert(err instanceof Error ? err.message : 'Fehler beim Löschen der Medikation');
+  }
+});
+
+function handleCloseModal() {
+  showModal.value = false;
+  editingMedication.value = null;
+}
+
+function handleModalSuccess() {
+  // Modal wird bereits geschlossen
+}
+
 function editMedication(medication: any) {
-  // TODO: Implementieren
-  console.log('Edit medication', medication);
+  editingMedication.value = medication;
+  showModal.value = true;
 }
 
 function deleteMedication(medication: any) {
-  if (!confirm('Möchten Sie diese Medikation wirklich löschen?')) return;
-  // TODO: Implementieren
-  console.log('Delete medication', medication);
+  deletingMedication.value = medication;
+  showDeleteModal.value = true;
+}
+
+function handleDeleteConfirm(reason: string) {
+  if (!deletingMedication.value || !reason.trim()) {
+    alert('Bitte geben Sie einen Grund für die Löschung an');
+    return;
+  }
+  deleteMutation.mutate({ medicationId: deletingMedication.value.id, reason: reason.trim() });
 }
 </script>
 

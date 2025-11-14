@@ -41,36 +41,87 @@
       </div>
     </div>
 
-    <!-- Modal (TODO: Implementieren) -->
+    <!-- Allergy Modal -->
+    <AllergyModal
+      :open="showModal"
+      :patient-id="patientId"
+      :allergy="editingAllergy"
+      @close="handleCloseModal"
+      @success="handleModalSuccess"
+    />
+
+    <!-- Delete Modal -->
+    <DeleteModal
+      :open="showDeleteModal"
+      title="Allergie löschen"
+      :item-name="deletingAllergy?.substance || ''"
+      @close="showDeleteModal = false"
+      @confirm="handleDeleteConfirm"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useQuery } from '@tanstack/vue-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query';
 import { PhPlus, PhPencil, PhTrash } from '@phosphor-icons/vue';
 import { patientApi } from '@/services/api';
+import AllergyModal from './AllergyModal.vue';
+import DeleteModal from '@/shared/components/DeleteModal.vue';
 
 const props = defineProps<{
   patientId: string;
 }>();
 
+const queryClient = useQueryClient();
 const showModal = ref(false);
+const showDeleteModal = ref(false);
+const editingAllergy = ref<any | null>(null);
+const deletingAllergy = ref<any | null>(null);
 
 const { data: allergies = [], isLoading, isError, error } = useQuery({
   queryKey: ['patient-allergies', props.patientId],
   queryFn: () => patientApi.getAllergies(props.patientId)
 });
 
+const deleteMutation = useMutation({
+  mutationFn: ({ allergyId, reason }: { allergyId: string; reason: string }) =>
+    patientApi.deleteAllergy(props.patientId, allergyId, reason),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['patient-allergies', props.patientId] });
+    showDeleteModal.value = false;
+    deletingAllergy.value = null;
+  },
+  onError: (err) => {
+    alert(err instanceof Error ? err.message : 'Fehler beim Löschen der Allergie');
+  }
+});
+
+function handleCloseModal() {
+  showModal.value = false;
+  editingAllergy.value = null;
+}
+
+function handleModalSuccess() {
+  // Modal wird bereits geschlossen
+}
+
 function editAllergy(allergy: any) {
-  // TODO: Implementieren
-  console.log('Edit allergy', allergy);
+  editingAllergy.value = allergy;
+  showModal.value = true;
 }
 
 function deleteAllergy(allergy: any) {
-  if (!confirm('Möchten Sie diese Allergie wirklich löschen?')) return;
-  // TODO: Implementieren
-  console.log('Delete allergy', allergy);
+  deletingAllergy.value = allergy;
+  showDeleteModal.value = true;
+}
+
+function handleDeleteConfirm(reason: string) {
+  if (!deletingAllergy.value || !reason.trim()) {
+    alert('Bitte geben Sie einen Grund für die Löschung an');
+    return;
+  }
+  deleteMutation.mutate({ allergyId: deletingAllergy.value.id, reason: reason.trim() });
 }
 </script>
 

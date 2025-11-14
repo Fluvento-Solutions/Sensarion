@@ -38,40 +38,91 @@
       </div>
     </div>
 
-    <!-- Modal (TODO: Implementieren) -->
+    <!-- Diagnosis Modal -->
+    <DiagnosisModal
+      :open="showModal"
+      :patient-id="patientId"
+      :diagnosis="editingDiagnosis"
+      @close="handleCloseModal"
+      @success="handleModalSuccess"
+    />
+
+    <!-- Delete Modal -->
+    <DeleteModal
+      :open="showDeleteModal"
+      title="Diagnose löschen"
+      :item-name="deletingDiagnosis?.text || ''"
+      @close="showDeleteModal = false"
+      @confirm="handleDeleteConfirm"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useQuery } from '@tanstack/vue-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query';
 import { PhPlus, PhPencil, PhTrash } from '@phosphor-icons/vue';
 import { patientApi } from '@/services/api';
+import DiagnosisModal from './DiagnosisModal.vue';
+import DeleteModal from '@/shared/components/DeleteModal.vue';
 
 const props = defineProps<{
   patientId: string;
 }>();
 
+const queryClient = useQueryClient();
 const showModal = ref(false);
+const showDeleteModal = ref(false);
+const editingDiagnosis = ref<any | null>(null);
+const deletingDiagnosis = ref<any | null>(null);
 
 const { data: diagnoses = [], isLoading, isError, error } = useQuery({
   queryKey: ['patient-diagnoses', props.patientId],
   queryFn: () => patientApi.getDiagnoses(props.patientId)
 });
 
+const deleteMutation = useMutation({
+  mutationFn: ({ diagnosisId, reason }: { diagnosisId: string; reason: string }) =>
+    patientApi.deleteDiagnosis(props.patientId, diagnosisId, reason),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['patient-diagnoses', props.patientId] });
+    showDeleteModal.value = false;
+    deletingDiagnosis.value = null;
+  },
+  onError: (err) => {
+    alert(err instanceof Error ? err.message : 'Fehler beim Löschen der Diagnose');
+  }
+});
+
 function formatDate(date: string): string {
   return new Date(date).toLocaleDateString('de-DE');
 }
 
+function handleCloseModal() {
+  showModal.value = false;
+  editingDiagnosis.value = null;
+}
+
+function handleModalSuccess() {
+  // Modal wird bereits geschlossen
+}
+
 function editDiagnosis(diagnosis: any) {
-  // TODO: Implementieren
-  console.log('Edit diagnosis', diagnosis);
+  editingDiagnosis.value = diagnosis;
+  showModal.value = true;
 }
 
 function deleteDiagnosis(diagnosis: any) {
-  if (!confirm('Möchten Sie diese Diagnose wirklich löschen?')) return;
-  // TODO: Implementieren
-  console.log('Delete diagnosis', diagnosis);
+  deletingDiagnosis.value = diagnosis;
+  showDeleteModal.value = true;
+}
+
+function handleDeleteConfirm(reason: string) {
+  if (!deletingDiagnosis.value || !reason.trim()) {
+    alert('Bitte geben Sie einen Grund für die Löschung an');
+    return;
+  }
+  deleteMutation.mutate({ diagnosisId: deletingDiagnosis.value.id, reason: reason.trim() });
 }
 </script>
 
