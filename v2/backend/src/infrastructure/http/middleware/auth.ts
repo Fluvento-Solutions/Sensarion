@@ -34,12 +34,22 @@ export async function authMiddleware(
   const authHeader = request.headers.authorization;
   
   if (!authHeader) {
+    console.warn('[Auth] No Authorization header in request:', {
+      url: request.url,
+      method: request.method,
+      headers: Object.keys(request.headers)
+    });
     throw ProblemDetailsFactory.unauthorized('Authorization header required');
   }
   
   const [scheme, token] = authHeader.split(' ');
   
   if (scheme !== 'Bearer' || !token) {
+    console.warn('[Auth] Invalid authorization format:', {
+      url: request.url,
+      scheme,
+      hasToken: !!token
+    });
     throw ProblemDetailsFactory.unauthorized('Invalid authorization format. Expected: Bearer <token>');
   }
   

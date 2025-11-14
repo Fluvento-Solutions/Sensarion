@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
+import { useAuthStore } from '@/features/identity/useAuthStore';
 
 /**
  * Route-Definitionen
@@ -72,8 +73,15 @@ export const router = createRouter({
 });
 
 // Navigation Guards
-router.beforeEach((_to, _from, next) => {
-  // TODO: Auth & Feature Gate Checks
-  next();
+router.beforeEach((to, _from, next) => {
+  const authStore = useAuthStore();
+  const requiresAuth = to.matched.some(record => record.meta.requiresAuth !== false);
+  
+  if (requiresAuth && !authStore.isAuthenticated) {
+    // Redirect to login if route requires auth but user is not authenticated
+    next({ name: 'login', query: { redirect: to.fullPath } });
+  } else {
+    next();
+  }
 });
 

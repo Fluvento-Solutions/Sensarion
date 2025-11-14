@@ -16,14 +16,22 @@ const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://loca
 function getAuthHeaders(): HeadersInit {
   try {
     const raw = localStorage.getItem('sensarion-auth');
-    if (!raw) return { 'Content-Type': 'application/json' };
+    if (!raw) {
+      console.warn('[API] No auth data in localStorage');
+      return { 'Content-Type': 'application/json' };
+    }
     const parsed = JSON.parse(raw) as { accessToken?: string | null };
     const token = parsed.accessToken;
+    if (!token) {
+      console.warn('[API] No accessToken in auth data');
+      return { 'Content-Type': 'application/json' };
+    }
     return {
       'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` })
+      Authorization: `Bearer ${token}`
     };
-  } catch {
+  } catch (error) {
+    console.error('[API] Error reading auth headers:', error);
     return { 'Content-Type': 'application/json' };
   }
 }
