@@ -26,6 +26,7 @@ function getAuthHeaders(): HeadersInit {
       console.warn('[API] No accessToken in auth data');
       return { 'Content-Type': 'application/json' };
     }
+    console.log('[API] Using token for request:', { tokenLength: token.length, tokenPrefix: token.substring(0, 20) + '...' });
     return {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`
@@ -41,6 +42,17 @@ function getAuthHeaders(): HeadersInit {
  */
 async function handleJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
+    // Handle 401 Unauthorized - clear session and redirect to login
+    if (response.status === 401) {
+      const authStore = await import('@/features/identity/useAuthStore').then(m => m.useAuthStore());
+      authStore().clearSession();
+      
+      // Only redirect if we're not already on the login page
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+      }
+    }
+    
     const error = await response.json().catch(() => ({}));
     if (isRFC7807Error(error)) {
       throw mapRFC7807Error(error);

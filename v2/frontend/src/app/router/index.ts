@@ -77,8 +77,12 @@ router.beforeEach((to, _from, next) => {
   const authStore = useAuthStore();
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth !== false);
   
+  // Load from storage to ensure we have the latest state
+  authStore.loadFromStorage?.();
+  
   if (requiresAuth && !authStore.isAuthenticated) {
     // Redirect to login if route requires auth but user is not authenticated
+    console.warn('[Router] Unauthenticated access attempt, redirecting to login');
     next({ name: 'login', query: { redirect: to.fullPath } });
   } else {
     next();

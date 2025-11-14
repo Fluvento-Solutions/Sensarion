@@ -55,20 +55,28 @@ export const useAuthStore = defineStore('auth', () => {
     state.refreshToken = refreshToken;
     state.user = user;
     persist();
+    console.log('[Auth] Session set:', { userId: user.id, email: user.email });
   };
   
   const clearSession = () => {
+    console.log('[Auth] Clearing session');
     state.accessToken = null;
     state.refreshToken = null;
     state.user = null;
     localStorage.removeItem(STORAGE_KEY);
   };
   
+  // Expose loadFromStorage for router guard
+  const loadFromStoragePublic = () => {
+    loadFromStorage();
+  };
+  
   return {
     state,
     isAuthenticated,
     setSession,
-    clearSession
+    clearSession,
+    loadFromStorage: loadFromStoragePublic
   };
 });
 
